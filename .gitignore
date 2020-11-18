@@ -1,0 +1,31 @@
+*.egg
+*.egg-info
+__pycache__
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+!source/.typescript/lambda/**/*.js
+!source/lambda/**/*.js
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+!**/cdk-solution-helper/index.js
+
+deployment/global-s3-assets
+deployment/regional-s3-assets
+open-source/
+.vscode/settings.json
+
+source/lambda/layers/*
+
+.DS_Store
+
+# Temporary folders
+tmp/
+temp/
+
+### VisualStudioCode Path ###
+.vscode

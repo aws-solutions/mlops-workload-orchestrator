@@ -1,0 +1,25 @@
+aws-mlops-framework
+Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Licensed under the Apache License Version 2.0 (the "License"). You may not use this file except
+in compliance with the License. A copy of the License is located at http://www.apache.org/licenses/
+or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+**********************
+THIRD PARTY COMPONENTS
+**********************
+This software includes third party software subject to the following copyrights:
+
+aws-cdk under the Apache License Version 2.0
+AWS SDK under the Apache License Version 2.0
+boto3 under the Apache License Version 2.0
+pytest-env under the Massachusetts Institute of Technology (MIT) license
+crhelper under the Apache License Version 2.0
+jsii under the Apache License Version 2.0
+pytest under the Massachusetts Institute of Technology (MIT) license
+pytest-cov under the Massachusetts Institute of Technology (MIT) license
+pytest-mock under the Massachusetts Institute of Technology (MIT) license
+requests under the Apache License Version 2.0
+sagemaker under the Apache License Version 2.0
+urllib3 under the Massachusetts Institute of Technology (MIT) license

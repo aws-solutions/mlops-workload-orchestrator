@@ -1,0 +1,7 @@
+sagemaker==2.15.3
+boto3==1.14.62
+crhelper==2.0.6
+urllib3==1.25.10
+pytest==6.1.2
+pytest-cov==2.10.1
+moto==1.3.16

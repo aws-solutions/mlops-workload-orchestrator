@@ -1,0 +1,5 @@
+# exclude python 3rd party modules
+*.dist-info/
+crhelper/
+## crhelper tests directory
+tests/

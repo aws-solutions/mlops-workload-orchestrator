@@ -1,0 +1,7 @@
+[run]
+omit =
+  tests/*
+  */.env/*
+  cdk.out/*
+  conftest.py
+  test_*.py
