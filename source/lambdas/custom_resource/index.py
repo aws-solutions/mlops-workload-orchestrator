@@ -22,11 +22,13 @@ from crhelper import CfnResource
 
 logger = logging.getLogger(__name__)
 
-s3_client = boto3.client('s3')
-helper = CfnResource(json_logging=True, log_level='INFO')
+s3_client = boto3.client("s3")
+helper = CfnResource(json_logging=True, log_level="INFO")
+
 
 def on_event(event, context):
-  helper(event, context)
+    helper(event, context)
+
 
 @helper.create
 def custom_resource(event, _):
@@ -36,15 +38,13 @@ def custom_resource(event, _):
         # if you would like to change this so that it downloads from a bucket in your account
         # change this following line to use s3_client.download_fileobj('BUCKET_NAME', 'OBJECT_NAME', file)
         # and give s3 read permission to this lambda function
-        source_url = os.environ.get('source_bucket') + '/blueprints.zip'
-        urllib.request.urlretrieve(source_url, '/tmp/blueprints.zip')
-        shutil.unpack_archive('/tmp/blueprints.zip', '/tmp/blueprints/', 'zip')
+        source_url = os.environ.get("source_bucket") + "/blueprints.zip"
+        urllib.request.urlretrieve(source_url, "/tmp/blueprints.zip")
+        shutil.unpack_archive("/tmp/blueprints.zip", "/tmp/blueprints/", "zip")
 
-
-        local_directory = '/tmp/blueprints'
-        bucket = os.environ.get('destination_bucket')
-        destination = ''
-
+        local_directory = "/tmp/blueprints"
+        bucket = os.environ.get("destination_bucket")
+        destination = ""
 
         # enumerate local files recursively
         for root, dirs, files in os.walk(local_directory):
@@ -60,13 +60,14 @@ def custom_resource(event, _):
                 logger.info("Uploading %s..." % s3_path)
                 s3_client.upload_file(local_path, bucket, s3_path)
 
-        return "CopyAssets-"+bucket
+        return "CopyAssets-" + bucket
     except Exception as e:
         exc_type, exc_value, exc_tb = sys.exc_info()
         logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
         raise e
 
+
 @helper.update
 @helper.delete
 def no_op(_, __):
-    pass # No action is required when stack is deleted
+    pass  # No action is required when stack is deleted

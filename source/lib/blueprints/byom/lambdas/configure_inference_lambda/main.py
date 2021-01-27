@@ -53,9 +53,10 @@ def handler(event, context):
     logger.info("finished updating inference lambda")
     logger.debug(response)
     # Send response back to codepipeline success or fail.
-    if(response['ResponseMetadata']['HTTPStatusCode'] == 200):
+    if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
         cp_client.put_job_success_result(jobId=job_id)
     else:
-        cp_client.put_job_failure_result(jobId=job_id, failureDetails={'message': "Job failed. Check the logs for more info.", 'type': 'JobFailed'})
-
-
+        cp_client.put_job_failure_result(
+            jobId=job_id,
+            failureDetails={"message": "Job failed. Check the logs for more info.", "type": "JobFailed"},
+        )

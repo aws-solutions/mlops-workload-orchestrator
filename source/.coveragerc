@@ -1,5 +1,8 @@
 [run]
 omit =
   tests/*
-  */.env/*
+  setup.py
+  */.venv-test/*
   cdk.out/*
+source =
+  .

@@ -1,4 +1,4 @@
-##################################################################################################################
+#######################################################################################################################
 #  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
@@ -23,6 +23,7 @@ from shared.logger import get_logger
 from shared.helper import get_client, reset_client
 from main import handler
 
+
 @pytest.fixture(autouse=True)
 def mock_env_variables():
     new_env = {
@@ -30,9 +31,10 @@ def mock_env_variables():
         "assets_bucket": "testbucket",
         "batch_inference_data": "test",
         "inference_instance": "test",
-        "inference_lambda_arn": "testname"
+        "inference_lambda_arn": "testname",
     }
     os.environ = {**os.environ, **new_env}
+
 
 @pytest.fixture
 def lm_expected_params():
@@ -49,13 +51,7 @@ def cp_expected_params_success():
 
 @pytest.fixture
 def cp_expected_params_failure():
-    return {
-        "jobId": "test_job_id",
-        "failureDetails": {
-           'message': ANY,
-           'type': 'JobFailed'
-        }
-    }
+    return {"jobId": "test_job_id", "failureDetails": {"message": ANY, "type": "JobFailed"}}
 
 
 @pytest.fixture
@@ -84,6 +80,7 @@ def lm_response_200():
             {"Arn": "string", "LocalMountPath": "string"},
         ],
     }
+
 
 @pytest.fixture
 def lm_response_500():
@@ -120,13 +117,12 @@ def event():
             "id": "test_job_id",
             "data": {
                 "actionConfiguration": {
-                    "configuration": {
-                        "UserParameters": json.dumps({"0": {"endpointName": "test"}})
-                    }
+                    "configuration": {"UserParameters": json.dumps({"0": {"endpointName": "test"}})}
                 }
             },
         },
     }
+
 
 @mock_sts
 def test_handler_success(lm_expected_params, lm_response_200, cp_expected_params_success, event):

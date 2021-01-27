@@ -13,6 +13,7 @@
 import os
 from time import gmtime, strftime
 import boto3
+import uuid
 from shared.wrappers import code_pipeline_exception_handler
 from shared.logger import get_logger
 from shared.helper import get_client
@@ -34,8 +35,8 @@ def handler(event, context):
     batch_data = os.environ.get("batch_inference_data")
     inference_instance = os.environ.get("inference_instance")
 
-    batch_job_name = f'{model_name}-Batch-Transform-{strftime("%Y-%m-%d-%H-%M-%S", gmtime())}'
-    output_location = f's3://{assets_bucket}/{prefix}/output/{batch_job_name}'
+    batch_job_name = f"{model_name}-batch-transform-{str(uuid.uuid4())[:8]}"
+    output_location = f"s3://{assets_bucket}/{prefix}/output/{batch_job_name}"
 
     request = {
         "TransformJobName": batch_job_name,
@@ -46,12 +47,7 @@ def handler(event, context):
             "AssembleWith": "Line",
         },
         "TransformInput": {
-            "DataSource": {
-                "S3DataSource": {
-                    "S3DataType": "S3Prefix",
-                    "S3Uri": f"s3://{assets_bucket}/{batch_data}"
-                }
-            },
+            "DataSource": {"S3DataSource": {"S3DataType": "S3Prefix", "S3Uri": f"s3://{assets_bucket}/{batch_data}"}},
             "ContentType": "text/csv",
             "SplitType": "Line",
             "CompressionType": "None",
@@ -63,8 +59,10 @@ def handler(event, context):
     logger.info(f"Response from create transform job request. response: {response}")
     logger.info(f"Created Transform job with name: {batch_job_name}")
 
-    if(response['ResponseMetadata']['HTTPStatusCode'] == 200):
+    if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
         cp_client.put_job_success_result(jobId=job_id)
-        logger.info(f'Sent success message back to codepipeline with job_id: {job_id}')
+        logger.info(f"Sent success message back to codepipeline with job_id: {job_id}")
     else:
-        cp_client.put_job_failure_result(jobId=job_id, failureDetails={'message': "Job failed. Check the logs for more info.", 'type': 'JobFailed'})
+        cp_client.put_job_failure_result(
+            jobId=job_id, failureDetails={"message": "Job failed. Check the logs for more info.", "type": "JobFailed"}
+        )

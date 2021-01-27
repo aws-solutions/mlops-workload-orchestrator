@@ -1,9 +1,10 @@
 # aws-mlops-framework
+
 The machine learning (ML) lifecycle is an iterative and repetitive process that involves
 changing models over time and learning from new data. As ML applications gain popularity,
 organizations are building new and better applications for a wide range of use cases
-including optimized email campaigns, forecasting tools, recommendation engines, self-
-driving vehicles, virtual personal assistants, and more. While operational and pipelining
+including optimized email campaigns, forecasting tools, recommendation engines, self-driving
+vehicles, virtual personal assistants, and more. While operational and pipelining
 processes vary greatly across projects and organizations, the processes contain
 commonalities across use cases.
 
@@ -14,13 +15,15 @@ services and third-party services. The solution’s template allows customers to
 trained models, configure the orchestration of the pipeline, trigger the start of the deployment
 process, move models through different stages of deployment, and monitor the successes
 and failures of the operations.
+
 You can use batch and real-time data inferences to configure the pipeline for your business
-context. This solution increases your team’s agility and efficiency by allowing them to
+context. You can also provision multiple model monitor pipelines to periodically monitor the quality of deployed Amazon SageMaker's ML models. This solution increases your team’s agility and efficiency by allowing them to
 repeat successful processes at scale.
 
-***
+---
 
 ## Architecture
+
 The AWS CloudFormation template deploys a Pipeline Provisioning framework that
 provisions a machine learning pipeline (Bring Your Own Model for SageMaker). The
 template includes the AWS Lambda functions and AWS Identity and Access Management
@@ -32,7 +35,7 @@ The provisioned pipeline includes four stages: source, build, deploy, and share.
 
 ![architecture](source/architecture.png)
 
-***
+---
 
 ## File Structure
 
@@ -72,7 +75,7 @@ Clone this git repository.
 
 `git clone https://github.com/awslabs/<repository_name>`
 
-***
+---
 
 ### 2. Running Unit Tests
 
@@ -82,45 +85,50 @@ The `/source/run-all-tests.sh` script is the centralized script for running all 
 
 This script is called from the solution build scripts to ensure that specified tests are passing while performing build, validation and publishing tasks via the pipeline.
 
-***
+---
 
 ### 3. Building Project Distributable
-* Configure the bucket name of your target Amazon S3 distribution bucket
+
+- Configure the bucket name of your target Amazon S3 distribution bucket
+
 ```
 export DIST_OUTPUT_BUCKET=my-bucket-name # bucket where customized code will reside
 export SOLUTION_NAME=my-solution-name
 export VERSION=my-version # version number for the customized code
 ```
+
 _Note:_ You would have to create an S3 bucket with the prefix 'my-bucket-name-<aws_region>'; aws_region is where you are testing the customized solution. Also, the assets in bucket should be publicly accessible.
 
-* Now build the distributable:
+- Now build the distributable:
+
 ```
 chmod +x ./build-s3-dist.sh \n
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET $SOLUTION_NAME $VERSION \n
 ```
 
-* Deploy the distributable to an Amazon S3 bucket in your account. _Note:_ you must have the AWS Command Line Interface installed.
+- Deploy the distributable to an Amazon S3 bucket in your account. _Note:_ You must have the AWS Command Line Interface installed.
+
 ```
 aws s3 cp ./dist/ s3://my-bucket-name-<aws_region>/$SOLUTION_NAME/$VERSION/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name \n
 ```
 
-* Get the link of the solution template uploaded to your Amazon S3 bucket.
-* Deploy the solution to your account by launching a new AWS CloudFormation stack using the link of the solution template in Amazon S3.
+- Get the link for the solution template uploaded to your Amazon S3 bucket.
+- Deploy the solution to your account by launching a new AWS CloudFormation stack using the link of the solution template in Amazon S3.
 
 ## Known Issues
 
 ### Pipeline may fail in custom model container build due to Docker Hub rate limits
 
 When building custom model container that pulls public docker images from Docker Hub in short time period, you may occasionally face throttling errors with an error message such as:
-``` toomanyrequests  You have reached your pull rate limit. You may increase the limit by authenticating and upgrading: https://www.docker.com/increase-rate-limit```
+` toomanyrequests You have reached your pull rate limit. You may increase the limit by authenticating and upgrading: https://www.docker.com/increase-rate-limit`
 
 This is due to Docker Inc. [limiting the rate at which images are pulled under Docker Hub anonymous and free plans](https://docs.docker.com/docker-hub/download-rate-limit/). Under the new limits of Dockerhub, free plan anonymous use is limited to 100 pulls per six hours, free plan authenticated accounts limited to 200 pulls per six hours, and Pro and Team accounts do not see any rate limits.
 
 For more information regarding this issue and short-term and long-term fixes, refer to this AWS blog post: [Advice for customers dealing with Docker Hub rate limits, and a Coming Soon announcement](https://aws.amazon.com/blogs/containers/advice-for-customers-dealing-with-docker-hub-rate-limits-and-a-coming-soon-announcement/)
 
-***
+---
 
-Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 Licensed under the Apache License Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
 

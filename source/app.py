@@ -12,30 +12,54 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 from aws_cdk import core
-
 from lib.aws_mlops_stack import MLOpsStack
 from lib.blueprints.byom.byom_batch_build_container import BYOMBatchBuildStack
 from lib.blueprints.byom.byom_batch_builtin_container import BYOMBatchBuiltinStack
 from lib.blueprints.byom.byom_realtime_build_container import BYOMRealtimeBuildStack
 from lib.blueprints.byom.byom_realtime_builtin_container import BYOMRealtimeBuiltinStack
+from lib.blueprints.byom.model_monitor import ModelMonitorStack
 
-solution_id = 'SO0136'
+solution_id = "SO0136"
 app = core.App()
-MLOpsStack(app, "aws-mlops-framework",
-  description=f'({solution_id}) - AWS MLOps Framework. Version %%VERSION%%'
+MLOpsStack(app, "aws-mlops-framework", description=f"({solution_id}) - AWS MLOps Framework. Version %%VERSION%%")
+
+BYOMBatchBuildStack(
+    app,
+    "BYOMBatchBuildStack",
+    description=(
+        f"({solution_id}byom-bc) - Bring Your Own Model pipeline with Batch Transform and a custom "
+        f"model build in AWS MLOps Framework. Version %%VERSION%%"
+    ),
+)
+BYOMBatchBuiltinStack(
+    app,
+    "BYOMBatchBuiltinStack",
+    description=(
+        f"({solution_id}byom-bb) - Bring Your Own Model pipeline with Batch Transform and a Built-in "
+        f"Sagemaker model in AWS MLOps Framework. Version %%VERSION%%"
+    ),
+)
+BYOMRealtimeBuildStack(
+    app,
+    "BYOMRealtimeBuildStack",
+    description=(
+        f"({solution_id}byom-rc) - Bring Your Own Model pipeline with Realtime inference and a custom "
+        f"model build in AWS MLOps Framework. Version %%VERSION%%"
+    ),
+)
+BYOMRealtimeBuiltinStack(
+    app,
+    "BYOMRealtimeBuiltinStack",
+    description=(
+        f"({solution_id}byom-rb) - Bring Your Own Model pipeline with Realtime inference and a Built-in "
+        f"Sagemaker model in AWS MLOps Framework. Version %%VERSION%%"
+    ),
 )
 
-BYOMBatchBuildStack(app, "BYOMBatchBuildStack",
-  description=f'({solution_id}byom-bc) - Bring Your Own Model pipeline with Batch Transform and a custom model build in AWS MLOps Framework. Version %%VERSION%%'
-)
-BYOMBatchBuiltinStack(app, "BYOMBatchBuiltinStack",
-  description=f'({solution_id}byom-bb) - Bring Your Own Model pipeline with Batch Transform and a Built-in Sagemaker model in AWS MLOps Framework. Version %%VERSION%%'
-)
-BYOMRealtimeBuildStack(app, "BYOMRealtimeBuildStack",
-  description=f'({solution_id}byom-rc) - Bring Your Own Model pipeline with Realtime inference and a custom model build in AWS MLOps Framework. Version %%VERSION%%'
-)
-BYOMRealtimeBuiltinStack(app, "BYOMRealtimeBuiltinStack",
-  description=f'({solution_id}byom-rb) - Bring Your Own Model pipeline with Realtime inference and a Built-in Sagemaker model in AWS MLOps Framework. Version %%VERSION%%'
+ModelMonitorStack(
+    app,
+    "ModelMonitorStack",
+    description=(f"({solution_id}byom-mm) - Model Monitor pipeline. Version %%VERSION%%"),
 )
 
 app.synth()

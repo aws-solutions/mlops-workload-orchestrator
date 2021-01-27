@@ -21,7 +21,7 @@ from main import handler
 
 
 @pytest.fixture(autouse=True)
-def mock_env_variables() :
+def mock_env_variables():
     new_env = {
         "model_name": "test",
         "assets_bucket": "testbucket",
@@ -118,16 +118,17 @@ def event():
         "CodePipeline.job": {"id": "test_job_id"},
     }
 
+
 @mock_sts
 def test_handler_success(
-        sm_describe_model_expected_params,
-        sm_describe_model_response,
-        sm_delete_model_expected_params,
-        sm_create_model_expected_params,
-        sm_create_model_response,
-        cp_expected_params,
-        event
-    ):
+    sm_describe_model_expected_params,
+    sm_describe_model_response,
+    sm_delete_model_expected_params,
+    sm_create_model_expected_params,
+    sm_create_model_response,
+    cp_expected_params,
+    event,
+):
 
     sm_client = get_client("sagemaker")
     cp_client = get_client("codepipeline")
@@ -137,20 +138,14 @@ def test_handler_success(
 
     # describe model
 
-    sm_stubber.add_response(
-        "describe_model", sm_describe_model_response, sm_describe_model_expected_params
-    )
+    sm_stubber.add_response("describe_model", sm_describe_model_response, sm_describe_model_expected_params)
 
     # delete model
     sm_delete_model_response = {}
-    sm_stubber.add_response(
-        "delete_model", sm_delete_model_response, sm_delete_model_expected_params
-    )
+    sm_stubber.add_response("delete_model", sm_delete_model_response, sm_delete_model_expected_params)
 
     # create model
-    sm_stubber.add_response(
-        "create_model", sm_create_model_response, sm_create_model_expected_params
-    )
+    sm_stubber.add_response("create_model", sm_create_model_response, sm_create_model_expected_params)
 
     # codepipeline
     cp_response = {}

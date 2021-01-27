@@ -26,34 +26,34 @@ cp_client = get_client("codepipeline")
 
 @code_pipeline_exception_handler
 def handler(event, context):
-  # todo: change the way to mock boto3 clients for unit tests without passing clients in input
+    # todo: change the way to mock boto3 clients for unit tests without passing clients in input
 
-  # Extract the Job ID
-  job_id = event['CodePipeline.job']['id']
+    # Extract the Job ID
+    job_id = event["CodePipeline.job"]["id"]
 
-  logger.info("Creating sagemaker model...")
-  model_name = os.environ['model_name']
-  try:
-    logger.info(f"Checking if model {model_name} exists")
-    model_old = sm_client.describe_model(ModelName=model_name)
-    # Checking if endpoint config with the same name exists
-    if model_old['ResponseMetadata']['HTTPStatusCode'] == 200:
-      logger.info(f"Model {model_name} exists. Deleting the model before creating a new one.")
-      delete_response = sm_client.delete_model(ModelName=model_name)
-      logger.info(f"Delete model response: {delete_response}")
-      logger.info(f"Model {model_name} deleted. Creating the new model.")
-      create_sm_model(job_id)
-  except botocore.exceptions.ClientError as error:
-    logger.info(str(error))
-    logger.info(f"Model {model_name} does not exist. Creating the new model.")
-    create_sm_model(job_id)
+    logger.info("Creating sagemaker model...")
+    model_name = os.environ["model_name"]
+    try:
+        logger.info(f"Checking if model {model_name} exists")
+        model_old = sm_client.describe_model(ModelName=model_name)
+        # Checking if endpoint config with the same name exists
+        if model_old["ResponseMetadata"]["HTTPStatusCode"] == 200:
+            logger.info(f"Model {model_name} exists. Deleting the model before creating a new one.")
+            delete_response = sm_client.delete_model(ModelName=model_name)
+            logger.info(f"Delete model response: {delete_response}")
+            logger.info(f"Model {model_name} deleted. Creating the new model.")
+            create_sm_model(job_id)
+    except botocore.exceptions.ClientError as error:
+        logger.info(str(error))
+        logger.info(f"Model {model_name} does not exist. Creating the new model.")
+        create_sm_model(job_id)
 
 
 def create_sm_model(job_id):
     # Get Container image uri
     container_image_uri = ""
     container_params = {}
-    if os.environ["container_uri"] == "": # using built in model
+    if os.environ["container_uri"] == "":  # using built in model
 
         container_image_uri = sagemaker.image_uris.retrieve(
             framework=os.environ["model_framework"],
@@ -66,7 +66,7 @@ def create_sm_model(job_id):
             "Mode": "SingleModel",
             "ModelDataUrl": os.environ["model_artifact_location"],
         }
-    else: # using custom model
+    else:  # using custom model
         container_image_uri = os.environ["container_uri"]
         container_params = {
             "Image": container_image_uri,

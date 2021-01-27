@@ -1,5 +1,5 @@
-##################################################################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#######################################################################################################################
+#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -22,6 +22,7 @@ from shared.logger import get_logger
 from shared.helper import get_client, reset_client
 from main import handler
 
+
 @pytest.fixture(autouse=True)
 def mock_env_variables():
     new_env = {
@@ -32,49 +33,46 @@ def mock_env_variables():
     }
     os.environ = {**os.environ, **new_env}
 
+
 @pytest.fixture
 def sm_describe_endpoint_config_params():
     return {"EndpointConfigName": "test-endpoint-config"}
+
 
 @pytest.fixture
 def sm_describe_endpoint_config_response():
     return {
         "ResponseMetadata": {"HTTPStatusCode": 200},
-        'EndpointConfigName': 'string',
-        'EndpointConfigArn': "arn:aws:sagemaker:region:account:transform-job/name",
-        'ProductionVariants': [
+        "EndpointConfigName": "string",
+        "EndpointConfigArn": "arn:aws:sagemaker:region:account:transform-job/name",
+        "ProductionVariants": [
             {
-                'VariantName': 'string',
-                'ModelName': 'string',
-                'InitialInstanceCount': 123,
-                'InstanceType': 'ml.t2.medium',
-                'InitialVariantWeight': 1.0,
-                'AcceleratorType': 'ml.eia1.medium'
+                "VariantName": "string",
+                "ModelName": "string",
+                "InitialInstanceCount": 123,
+                "InstanceType": "ml.t2.medium",
+                "InitialVariantWeight": 1.0,
+                "AcceleratorType": "ml.eia1.medium",
             },
         ],
-        'DataCaptureConfig': {
-            'EnableCapture': True,
-            'InitialSamplingPercentage': 123,
-            'DestinationS3Uri': 'string',
-            'KmsKeyId': 'string',
-            'CaptureOptions': [
-                {
-                    'CaptureMode': 'Input'
-                },
+        "DataCaptureConfig": {
+            "EnableCapture": True,
+            "InitialSamplingPercentage": 123,
+            "DestinationS3Uri": "string",
+            "KmsKeyId": "string",
+            "CaptureOptions": [
+                {"CaptureMode": "Input"},
             ],
-            'CaptureContentTypeHeader': {
-                'CsvContentTypes': [
-                    'string',
+            "CaptureContentTypeHeader": {
+                "CsvContentTypes": [
+                    "string",
                 ],
-                'JsonContentTypes': [
-                    'string',
-                ]
-            }
+            },
         },
-        'KmsKeyId': 'string',
-        'CreationTime': datetime(2015, 1, 1)
-
+        "KmsKeyId": "string",
+        "CreationTime": datetime(2015, 1, 1),
     }
+
 
 @pytest.fixture
 def sm_create_endpoint_config_params():
@@ -95,7 +93,6 @@ def sm_create_endpoint_config_params():
             "CaptureOptions": [{"CaptureMode": "Output"}, {"CaptureMode": "Input"}],
             "CaptureContentTypeHeader": {
                 "CsvContentTypes": ["text/csv"],
-                "JsonContentTypes": ["application/json"],
             },
         },
     }
@@ -119,9 +116,7 @@ def sm_create_endpoint_config_response_500():
 
 @pytest.fixture
 def sm_describe_endpoint_params():
-    return {
-        "EndpointName": "test-endpoint"
-    }
+    return {"EndpointName": "test-endpoint"}
 
 
 @pytest.fixture
@@ -190,10 +185,7 @@ def cp_expected_params():
 def cp_expected_params_failure():
     return {
         "jobId": "test_job_id",
-        "failureDetails": {
-           'message': "Job failed. Check the logs for more info.",
-           'type': 'JobFailed'
-        }
+        "failureDetails": {"message": "Job failed. Check the logs for more info.", "type": "JobFailed"},
     }
 
 
@@ -203,18 +195,19 @@ def event():
         "CodePipeline.job": {"id": "test_job_id"},
     }
 
+
 @mock_sts
 def test_handler_success(
-        sm_describe_endpoint_config_params,
-        sm_create_endpoint_config_params,
-        sm_create_endpoint_config_response,
-        cp_expected_params,
-        sm_describe_endpoint_params,
-        sm_create_endpoint_params,
-        sm_create_endpoint_response,
-        sm_describe_endpoint_response_2,
-        event
-    ):
+    sm_describe_endpoint_config_params,
+    sm_create_endpoint_config_params,
+    sm_create_endpoint_config_response,
+    cp_expected_params,
+    sm_describe_endpoint_params,
+    sm_create_endpoint_params,
+    sm_create_endpoint_response,
+    sm_describe_endpoint_response_2,
+    event,
+):
 
     sm_client = get_client("sagemaker")
     cp_client = get_client("codepipeline")
@@ -225,9 +218,7 @@ def test_handler_success(
     # endpoint config creation
     sm_describe_endpoint_config_response = {}
 
-
     cp_response = {}
-
 
     sm_stubber.add_client_error(
         "describe_endpoint_config",
@@ -251,9 +242,7 @@ def test_handler_success(
         expected_params=sm_describe_endpoint_params,
     )
 
-    sm_stubber.add_response(
-        "create_endpoint", sm_create_endpoint_response, sm_create_endpoint_params
-    )
+    sm_stubber.add_response("create_endpoint", sm_create_endpoint_response, sm_create_endpoint_params)
 
     sm_stubber.add_response(
         "describe_endpoint",
@@ -263,9 +252,7 @@ def test_handler_success(
 
     cp_stubber.add_response("put_job_success_result", cp_response, cp_expected_params)
 
-    expected_log_message = (
-        "Sent success message back to codepipeline with job_id: test_job_id"
-    )
+    expected_log_message = "Sent success message back to codepipeline with job_id: test_job_id"
     with sm_stubber:
         with cp_stubber:
             handler(event, {})

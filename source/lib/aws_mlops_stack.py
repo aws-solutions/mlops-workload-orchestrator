@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -11,24 +11,23 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 import uuid
-import os
 from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
-    aws_s3_assets as assets,
-    aws_s3_deployment as s3deploy,
     aws_lambda as lambda_,
     aws_codepipeline as codepipeline,
     aws_codepipeline_actions as codepipeline_actions,
     aws_codecommit as codecommit,
     aws_codebuild as codebuild,
     aws_apigateway as apigw,
-    aws_logs as logs,
-    custom_resources as cr,
     core,
 )
 from aws_solutions_constructs import aws_apigateway_lambda
 from lib.conditional_resource import ConditionalResources
+from lib.blueprints.byom.pipeline_definitions.helpers import (
+    suppress_s3_access_policy,
+    apply_secure_bucket_policy,
+)
 
 
 class MLOpsStack(core.Stack):
@@ -41,20 +40,37 @@ class MLOpsStack(core.Stack):
             "Email Address",
             type="String",
             description="Specify an email to receive notifications about pipeline outcomes.",
-            allowed_pattern='^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
+            allowed_pattern="^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$",
             min_length=5,
             max_length=320,
-            constraint_description="Please enter an email address with correct format (example@exmaple.com)"
+            constraint_description="Please enter an email address with correct format (example@exmaple.com)",
         )
         git_address = core.CfnParameter(
             self,
             "CodeCommit Repo Address",
             type="String",
             description="AWS CodeCommit repository clone URL to connect to the framework.",
-            allowed_pattern='^(((https:\/\/|ssh:\/\/)(git\-codecommit)\.[a-zA-Z0-9_.+-]+(amazonaws\.com\/)[a-zA-Z0-9-.]+(\/)[a-zA-Z0-9-.]+(\/)[a-zA-Z0-9-.]+$)|)',
+            allowed_pattern=(
+                "^(((https:\/\/|ssh:\/\/)(git\-codecommit)\.[a-zA-Z0-9_.+-]+(amazonaws\.com\/)[a-zA-Z0-9-.]"
+                "+(\/)[a-zA-Z0-9-.]+(\/)[a-zA-Z0-9-.]+$)|^$)"
+            ),
             min_length=0,
             max_length=320,
-            constraint_description="CodeCommit address must follow the pattern: ssh or https://git-codecommit.REGION.amazonaws.com/version/repos/REPONAME"
+            constraint_description=(
+                "CodeCommit address must follow the pattern: ssh or "
+                "https://git-codecommit.REGION.amazonaws.com/version/repos/REPONAME"
+            ),
+        )
+
+        # Get the optional S3 assets bucket to use
+        existing_bucket = core.CfnParameter(
+            self,
+            "ExistingS3Bucket",
+            type="String",
+            description="Name of existing S3 bucket to be used for ML assests. S3 Bucket must be in the same region as the deployed stack, and has versioning enabled. If not provided, a new S3 bucket will be created.",
+            allowed_pattern="((?=^.{3,63}$)(?!^(\d+\.)+\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)|^$)",
+            min_length=0,
+            max_length=63,
         )
 
         # Conditions
@@ -64,25 +80,69 @@ class MLOpsStack(core.Stack):
             expression=core.Fn.condition_not(core.Fn.condition_equals(git_address, "")),
         )
 
+        # client provided an existing S3 bucket name, to be used for assets
+        existing_bucket_provided = core.CfnCondition(
+            self,
+            "S3BucketProvided",
+            expression=core.Fn.condition_not(core.Fn.condition_equals(existing_bucket.value_as_string.strip(), "")),
+        )
+
+        # S3 bucket needs to be created for assets
+        create_new_bucket = core.CfnCondition(
+            self,
+            "CreateS3Bucket",
+            expression=core.Fn.condition_equals(existing_bucket.value_as_string.strip(), ""),
+        )
         # Constants
         pipeline_stack_name = "MLOps-pipeline"
 
         # CDK Resources setup
-        access_logs_bucket = s3.Bucket(self, "accessLogs", encryption=s3.BucketEncryption.S3_MANAGED, block_public_access=s3.BlockPublicAccess.BLOCK_ALL)
-        access_logs_bucket.node.default_child.cfn_options.metadata = {
-            "cfn_nag": {
-                "rules_to_suppress": [
-                    {"id": "W35", "reason": "This is the access bucket."},
-                    {
-                        "id": "W51",
-                        "reason": "This S3 bucket does not need a bucket policy.",
-                    },
-                ]
-            }
-        }
-        source_bucket = s3.Bucket.from_bucket_name(
-            self, "BucketByName", "%%BUCKET_NAME%%"
+        access_logs_bucket = s3.Bucket(
+            self,
+            "accessLogs",
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         )
+
+        # Apply secure transfer bucket policy
+        apply_secure_bucket_policy(access_logs_bucket)
+
+        # This is a logging bucket.
+        access_logs_bucket.node.default_child.cfn_options.metadata = suppress_s3_access_policy()
+
+        # Import user provide S3 bucket, if any. s3.Bucket.from_bucket_arn is used instead of s3.Bucket.from_bucket_name to allow cross account bucket.
+        client_existing_bucket = s3.Bucket.from_bucket_arn(
+            self,
+            "ClientExistingBucket",
+            f"arn:aws:s3:::{existing_bucket.value_as_string.strip()}",
+        )
+
+        # Create the resource if existing_bucket_provided condition is True
+        core.Aspects.of(client_existing_bucket).add(ConditionalResources(existing_bucket_provided))
+
+        # Creating assets bucket so that users can upload ML Models to it.
+        assets_bucket = s3.Bucket(
+            self,
+            "pipeline-assets-" + str(uuid.uuid4()),
+            versioned=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            server_access_logs_bucket=access_logs_bucket,
+            server_access_logs_prefix="assets_bucket_access_logs",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+        )
+
+        # Apply secure transport bucket policy
+        apply_secure_bucket_policy(assets_bucket)
+
+        # Create the resource if create_new_bucket condition is True
+        core.Aspects.of(assets_bucket).add(ConditionalResources(create_new_bucket))
+
+        # Get assets S3 bucket's name/arn, based on the condition
+        assets_s3_bucket_name = core.Fn.condition_if(
+            existing_bucket_provided.logical_id,
+            client_existing_bucket.bucket_name,
+            assets_bucket.bucket_name,
+        ).to_string()
 
         blueprints_bucket_name = "blueprint-repository-" + str(uuid.uuid4())
         blueprint_repository_bucket = s3.Bucket(
@@ -91,18 +151,10 @@ class MLOpsStack(core.Stack):
             encryption=s3.BucketEncryption.S3_MANAGED,
             server_access_logs_bucket=access_logs_bucket,
             server_access_logs_prefix=blueprints_bucket_name,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         )
-        blueprint_repository_bucket.node.default_child.cfn_options.metadata = {
-            "cfn_nag": {
-                "rules_to_suppress": [
-                    {
-                        "id": "W51",
-                        "reason": "This S3 bucket does not need a bucket policy. All access to this bucket is restricted by IAM (CDK grant_read method)",
-                    }
-                ]
-            }
-        }
+        # Apply secure transport bucket policy
+        apply_secure_bucket_policy(blueprint_repository_bucket)
 
         # Custom resource to copy source bucket content to blueprints bucket
         custom_resource_lambda_fn = lambda_.Function(
@@ -137,7 +189,7 @@ class MLOpsStack(core.Stack):
             service_token=custom_resource_lambda_fn.function_arn,
         )
         custom_resource.node.add_dependency(blueprint_repository_bucket)
-        ### IAM policies setup ###
+        # IAM policies setup ###
         cloudformation_role = iam.Role(
             self,
             "mlopscloudformationrole",
@@ -156,7 +208,10 @@ class MLOpsStack(core.Stack):
                         "cloudformation:ListStackResources",
                     ],
                     resources=[
-                        f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:stack/{pipeline_stack_name}*/*",
+                        (
+                            f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}:"
+                            f"{core.Aws.ACCOUNT_ID}:stack/{pipeline_stack_name}*/*"
+                        ),
                     ],
                 ),
                 iam.PolicyStatement(
@@ -171,9 +226,7 @@ class MLOpsStack(core.Stack):
                         "iam:AttachRolePolicy",
                         "iam:DetachRolePolicy",
                     ],
-                    resources=[
-                        f"arn:{core.Aws.PARTITION}:iam::{core.Aws.ACCOUNT_ID}:role/{pipeline_stack_name}*"
-                    ],
+                    resources=[f"arn:{core.Aws.PARTITION}:iam::{core.Aws.ACCOUNT_ID}:role/{pipeline_stack_name}*"],
                 ),
                 iam.PolicyStatement(
                     actions=[
@@ -182,7 +235,10 @@ class MLOpsStack(core.Stack):
                         "ecr:DescribeRepositories",
                     ],
                     resources=[
-                        f"arn:{core.Aws.PARTITION}:ecr:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:repository/awsmlopsmodels*"
+                        (
+                            f"arn:{core.Aws.PARTITION}:ecr:{core.Aws.REGION}:"
+                            f"{core.Aws.ACCOUNT_ID}:repository/awsmlopsmodels*"
+                        )
                     ],
                 ),
                 iam.PolicyStatement(
@@ -192,9 +248,18 @@ class MLOpsStack(core.Stack):
                         "codebuild:BatchGetProjects",
                     ],
                     resources=[
-                        f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:project/ContainerFactory*",
-                        f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:project/VerifySagemaker*",
-                        f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:report-group/*",
+                        (
+                            f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:"
+                            f"{core.Aws.ACCOUNT_ID}:project/ContainerFactory*"
+                        ),
+                        (
+                            f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:"
+                            f"{core.Aws.ACCOUNT_ID}:project/VerifySagemaker*"
+                        ),
+                        (
+                            f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:"
+                            f"{core.Aws.ACCOUNT_ID}:report-group/*"
+                        ),
                     ],
                 ),
                 iam.PolicyStatement(
@@ -221,7 +286,7 @@ class MLOpsStack(core.Stack):
                     resources=[
                         blueprint_repository_bucket.bucket_arn,
                         blueprint_repository_bucket.arn_for_objects("*"),
-                        f"arn:{core.Aws.PARTITION}:s3:::pipeline-assets-*",
+                        f"arn:{core.Aws.PARTITION}:s3:::{assets_s3_bucket_name}/*",
                     ],
                 ),
                 iam.PolicyStatement(
@@ -232,7 +297,10 @@ class MLOpsStack(core.Stack):
                         "codepipeline:GetPipelineState",
                     ],
                     resources=[
-                        f"arn:{core.Aws.PARTITION}:codepipeline:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:{pipeline_stack_name}*"
+                        (
+                            f"arn:{core.Aws.PARTITION}:codepipeline:{core.Aws.REGION}:"
+                            f"{core.Aws.ACCOUNT_ID}:{pipeline_stack_name}*"
+                        )
                     ],
                 ),
                 iam.PolicyStatement(
@@ -280,7 +348,14 @@ class MLOpsStack(core.Stack):
                         "sns:SetTopicAttributes",
                     ],
                     resources=[
-                        f"arn:{core.Aws.PARTITION}:sns:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:{pipeline_stack_name}*-PipelineNotification*",
+                        (
+                            f"arn:{core.Aws.PARTITION}:sns:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:"
+                            f"{pipeline_stack_name}*-PipelineNotification*"
+                        ),
+                        (
+                            f"arn:{core.Aws.PARTITION}:sns:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:"
+                            f"{pipeline_stack_name}*-ModelMonitorPipelineNotification*"
+                        ),
                     ],
                 ),
                 iam.PolicyStatement(
@@ -302,9 +377,7 @@ class MLOpsStack(core.Stack):
         orchestrator_policy.attach_to_role(cloudformation_role)
 
         # Lambda function IAM setup
-        lambda_passrole_policy = iam.PolicyStatement(
-            actions=["iam:passrole"], resources=[cloudformation_role.role_arn]
-        )
+        lambda_passrole_policy = iam.PolicyStatement(actions=["iam:passrole"], resources=[cloudformation_role.role_arn])
         # API Gateway and lambda setup to enable provisioning pipelines through API calls
         provisioner_apigw_lambda = aws_apigateway_lambda.ApiGatewayToLambda(
             self,
@@ -319,20 +392,18 @@ class MLOpsStack(core.Stack):
                     "authorizationType": apigw.AuthorizationType.IAM,
                 },
                 "restApiName": f"{core.Aws.STACK_NAME}-orchestrator",
-                "proxy": False
+                "proxy": False,
+                "dataTraceEnabled": True,
             },
         )
-        provision_resource = provisioner_apigw_lambda.api_gateway.root.add_resource('provisionpipeline')
-        provision_resource.add_method('POST')
-        status_resource = provisioner_apigw_lambda.api_gateway.root.add_resource('pipelinestatus')
-        status_resource.add_method('POST')
+
+        provision_resource = provisioner_apigw_lambda.api_gateway.root.add_resource("provisionpipeline")
+        provision_resource.add_method("POST")
+        status_resource = provisioner_apigw_lambda.api_gateway.root.add_resource("pipelinestatus")
+        status_resource.add_method("POST")
         blueprint_repository_bucket.grant_read(provisioner_apigw_lambda.lambda_function)
-        provisioner_apigw_lambda.lambda_function.add_to_role_policy(
-            lambda_passrole_policy
-        )
-        orchestrator_policy.attach_to_role(
-            provisioner_apigw_lambda.lambda_function.role
-        )
+        provisioner_apigw_lambda.lambda_function.add_to_role_policy(lambda_passrole_policy)
+        orchestrator_policy.attach_to_role(provisioner_apigw_lambda.lambda_function.role)
         provisioner_apigw_lambda.lambda_function.add_to_role_policy(
             iam.PolicyStatement(actions=["xray:PutTraceSegments"], resources=["*"])
         )
@@ -358,18 +429,15 @@ class MLOpsStack(core.Stack):
         provisioner_apigw_lambda.lambda_function.add_environment(
             key="ACCESS_BUCKET", value=str(access_logs_bucket.bucket_name)
         )
+        provisioner_apigw_lambda.lambda_function.add_environment(key="ASSETS_BUCKET", value=str(assets_s3_bucket_name))
         provisioner_apigw_lambda.lambda_function.add_environment(
             key="CFN_ROLE_ARN", value=str(cloudformation_role.role_arn)
         )
-        provisioner_apigw_lambda.lambda_function.add_environment(
-            key="PIPELINE_STACK_NAME", value=pipeline_stack_name
-        )
+        provisioner_apigw_lambda.lambda_function.add_environment(key="PIPELINE_STACK_NAME", value=pipeline_stack_name)
         provisioner_apigw_lambda.lambda_function.add_environment(
             key="NOTIFICATION_EMAIL", value=notification_email.value_as_string
         )
-        provisioner_apigw_lambda.lambda_function.add_environment(
-            key="LOG_LEVEL", value="DEBUG"
-        )
+        provisioner_apigw_lambda.lambda_function.add_environment(key="LOG_LEVEL", value="DEBUG")
         cfn_policy_for_lambda = orchestrator_policy.node.default_child
         cfn_policy_for_lambda.cfn_options.metadata = {
             "cfn_nag": {
@@ -382,15 +450,13 @@ class MLOpsStack(core.Stack):
             }
         }
 
-        ### Codepipeline with Git source definitions ###
+        # Codepipeline with Git source definitions ###
         source_output = codepipeline.Artifact()
         # processing git_address to retrieve repo name
         repo_name_split = core.Fn.split("/", git_address.value_as_string)
         repo_name = core.Fn.select(5, repo_name_split)
         # getting codecommit repo cdk object using 'from_repository_name'
-        repo = codecommit.Repository.from_repository_name(
-            self, "AWSMLOpsFrameworkRepository", repo_name
-        )
+        repo = codecommit.Repository.from_repository_name(self, "AWSMLOpsFrameworkRepository", repo_name)
         codebuild_project = codebuild.PipelineProject(
             self,
             "Take config file",
@@ -422,6 +488,7 @@ class MLOpsStack(core.Stack):
                         codepipeline_actions.CodeCommitSourceAction(
                             action_name="CodeCommit",
                             repository=repo,
+                            branch="main",
                             output=source_output,
                         )
                     ],
@@ -468,16 +535,12 @@ class MLOpsStack(core.Stack):
             }
         }
 
-        ###custom resource for operational metrics###
-        metricsMapping = core.CfnMapping(self, 'AnonymousData',
-            mapping={
-                'SendAnonymousData': {
-                    'Data': 'Yes'
-                }
-            }
-        )
-        metrics_condition = core.CfnCondition(self, 'AnonymousDatatoAWS',
-            expression=core.Fn.condition_equals(metricsMapping.find_in_map('SendAnonymousData', 'Data'), 'Yes')
+        # custom resource for operational metrics###
+        metricsMapping = core.CfnMapping(self, "AnonymousData", mapping={"SendAnonymousData": {"Data": "Yes"}})
+        metrics_condition = core.CfnCondition(
+            self,
+            "AnonymousDatatoAWS",
+            expression=core.Fn.condition_equals(metricsMapping.find_in_map("SendAnonymousData", "Data"), "Yes"),
         )
 
         helper_function = lambda_.Function(
@@ -489,25 +552,27 @@ class MLOpsStack(core.Stack):
             timeout=core.Duration.seconds(60),
         )
 
-        createIdFunction = core.CustomResource(self, 'CreateUniqueID',
+        createIdFunction = core.CustomResource(
+            self,
+            "CreateUniqueID",
             service_token=helper_function.function_arn,
-            properties={
-                'Resource': 'UUID'
-            },
-            resource_type='Custom::CreateUUID'
+            properties={"Resource": "UUID"},
+            resource_type="Custom::CreateUUID",
         )
 
-        sendDataFunction = core.CustomResource(self, 'SendAnonymousData',
+        sendDataFunction = core.CustomResource(
+            self,
+            "SendAnonymousData",
             service_token=helper_function.function_arn,
             properties={
-                'Resource': 'AnonymousMetric',
-                'UUID': createIdFunction.get_att_string('UUID'),
-                'gitSelected': git_address.value_as_string,
-                'Region': core.Aws.REGION,
-                'SolutionId': 'SO0136',
-                'Version': '%%VERSION%%',
+                "Resource": "AnonymousMetric",
+                "UUID": createIdFunction.get_att_string("UUID"),
+                "gitSelected": git_address.value_as_string,
+                "Region": core.Aws.REGION,
+                "SolutionId": "SO0136",
+                "Version": "%%VERSION%%",
             },
-            resource_type='Custom::AnonymousData'
+            resource_type="Custom::AnonymousData",
         )
 
         core.Aspects.of(helper_function).add(ConditionalResources(metrics_condition))
@@ -526,9 +591,39 @@ class MLOpsStack(core.Stack):
 
         # If user chooses Git as pipeline provision type, create codepipeline with Git repo as source
         core.Aspects.of(repo).add(ConditionalResources(git_address_provided))
-        core.Aspects.of(codecommit_pipeline).add(
-            ConditionalResources(git_address_provided)
+        core.Aspects.of(codecommit_pipeline).add(ConditionalResources(git_address_provided))
+        core.Aspects.of(codebuild_project).add(ConditionalResources(git_address_provided))
+
+        # Create Template Interface
+        self.template_options.metadata = {
+            "AWS::CloudFormation::Interface": {
+                "ParameterGroups": [
+                    {
+                        "Label": {"default": "MLOps Framework Settings"},
+                        "Parameters": [
+                            notification_email.logical_id,
+                            git_address.logical_id,
+                            existing_bucket.logical_id,
+                        ],
+                    }
+                ],
+                "ParameterLabels": {
+                    f"{notification_email.logical_id}": {"default": "Notification Email (Required)"},
+                    f"{git_address.logical_id}": {"default": "CodeCommit Repo URL Address (Optional)"},
+                    f"{existing_bucket.logical_id}": {"default": "Name of an Existing S3 Bucket (Optional)"},
+                },
+            }
+        }
+        # Outputs #
+        core.CfnOutput(
+            self,
+            id="BlueprintsBucket",
+            value=f"https://s3.console.aws.amazon.com/s3/buckets/{blueprint_repository_bucket.bucket_name}",
+            description="S3 Bucket to upload MLOps Framework Blueprints",
         )
-        core.Aspects.of(codebuild_project).add(
-            ConditionalResources(git_address_provided)
+        core.CfnOutput(
+            self,
+            id="AssetsBucket",
+            value=f"https://s3.console.aws.amazon.com/s3/buckets/{assets_s3_bucket_name}",
+            description="S3 Bucket to upload model artifact",
         )

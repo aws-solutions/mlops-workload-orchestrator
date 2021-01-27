@@ -44,23 +44,20 @@ def code_pipeline_exception_handler(f):
 
     return wrapper
 
+
 def api_exception_handler(f):
     @wraps(f)
     def wrapper(event, context):
         try:
             return f(event, context)
         except BadRequest as e:
-            logger.error(f"An BadRequest exception occurred, exception message: {str(e)}")
+            logger.error(f"A BadRequest exception occurred, exception message: {str(e)}")
             exc_type, exc_value, exc_tb = sys.exc_info()
             logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
             return {
                 "statusCode": 400,
                 "isBase64Encoded": False,
-                "body": json.dumps(
-                    {
-                        "message": str(e)
-                    }
-                ),
+                "body": json.dumps({"message": str(e)}),
                 "headers": {"Content-Type": "plain/text"},
             }
         except:
@@ -69,9 +66,7 @@ def api_exception_handler(f):
             return {
                 "statusCode": 500,
                 "isBase64Encoded": False,
-                "body": json.dumps(
-                    {"message": "Internal server error. See logs for more information."}
-                ),
+                "body": json.dumps({"message": "Internal server error. See logs for more information."}),
                 "headers": {"Content-Type": "plain/text"},
             }
 

@@ -12,7 +12,6 @@
 # #####################################################################################################################
 import os
 import json
-import time
 import botocore
 import boto3
 from shared.wrappers import code_pipeline_exception_handler
@@ -29,47 +28,41 @@ cp_client = get_client("codepipeline")
 def handler(event, context):
     # todo: change the way to mock boto3 clients for unit tests without passing clients in input
     # Extract the Job ID
-    job_id = event['CodePipeline.job']['id']
+    job_id = event["CodePipeline.job"]["id"]
 
-    endpointconfig_name = os.environ['model_name'] + "-endpoint-config"
+    endpointconfig_name = os.environ["model_name"] + "-endpoint-config"
     logger.info(f"Checking if sagemaker endpoint config {endpointconfig_name} exists...")
     try:
         endpointconfig_old = sm_client.describe_endpoint_config(EndpointConfigName=endpointconfig_name)
         # Checking if endpoint config with the same name exists
-        if endpointconfig_old['ResponseMetadata']['HTTPStatusCode'] == 200:
+        if endpointconfig_old["ResponseMetadata"]["HTTPStatusCode"] == 200:
             logger.info(f"Endpoint config {endpointconfig_name} already exists, skipping endpoint creation")
     except botocore.exceptions.ClientError as error:
         logger.info(str(error))
         logger.info(f"Endpoint config {endpointconfig_name} doesn't exist. Creating a new one.")
         # Sending request to create sagemeker endpoint config
         response = sm_client.create_endpoint_config(
-            EndpointConfigName=os.environ['model_name'] + "-endpoint-config",
+            EndpointConfigName=os.environ["model_name"] + "-endpoint-config",
             ProductionVariants=[
                 {
-                'VariantName': os.environ['model_name']+'-variant',
-                'ModelName': os.environ['model_name'],
-                'InitialInstanceCount': 1,
-                'InstanceType': os.environ['inference_instance'],
+                    "VariantName": os.environ["model_name"] + "-variant",
+                    "ModelName": os.environ["model_name"],
+                    "InitialInstanceCount": 1,
+                    "InstanceType": os.environ["inference_instance"],
                 },
             ],
             DataCaptureConfig={
-            "EnableCapture": True,
-            "InitialSamplingPercentage": 100,
-            "DestinationS3Uri": f's3://{os.environ["assets_bucket"]}/datacapture',
-            "CaptureOptions": [
-                { "CaptureMode": "Output" },
-                { "CaptureMode": "Input" }
-            ],
-            "CaptureContentTypeHeader": {
-                "CsvContentTypes": ["text/csv"],
-                "JsonContentTypes": ["application/json"]
-            }
-            }
+                "EnableCapture": True,
+                "InitialSamplingPercentage": 100,
+                "DestinationS3Uri": f's3://{os.environ["assets_bucket"]}/datacapture',
+                "CaptureOptions": [{"CaptureMode": "Output"}, {"CaptureMode": "Input"}],
+                "CaptureContentTypeHeader": {"CsvContentTypes": ["text/csv"]},
+            },
         )
         logger.info(f"Finished creating sagemaker endpoint config. respons: {response}")
 
     # Sending request to create sagemeker endpoint
-    endpoint_name = os.environ['model_name'] + "-endpoint"
+    endpoint_name = os.environ["model_name"] + "-endpoint"
     try:
         logger.info(f"Checking if endpoint {endpoint_name} exists...")
         endpoint_old = sm_client.describe_endpoint(EndpointName=endpoint_name)
@@ -87,21 +80,20 @@ def handler(event, context):
         )
         resp = sm_client.describe_endpoint(EndpointName=endpoint_name)
         logger.info("Finished sending request to create sagemaker endpoint")
-        logger.info("Endpoint Arn: " + resp['EndpointArn'])
+        logger.info("Endpoint Arn: " + resp["EndpointArn"])
         logger.debug(response)
 
         check_endpoint_status(job_id, resp, endpoint_name)
 
 
-
 def check_endpoint_status(job_id, endpoint_response, endpoint_name):
-    endpoint_status = endpoint_response['EndpointStatus']
+    endpoint_status = endpoint_response["EndpointStatus"]
     logger.info("Endpoint Status: " + endpoint_status)
-    if endpoint_status == 'Creating':
-        continuation_token = json.dumps({'previous_job_id': job_id})
-        logger.info('Putting job continuation')
+    if endpoint_status == "Creating":
+        continuation_token = json.dumps({"previous_job_id": job_id})
+        logger.info("Putting job continuation")
         cp_client.put_job_success_result(jobId=job_id, continuationToken=continuation_token)
-    elif endpoint_status == 'InService':
+    elif endpoint_status == "InService":
         cp_client.put_job_success_result(
             jobId=job_id,
             outputVariables={
@@ -109,4 +101,10 @@ def check_endpoint_status(job_id, endpoint_response, endpoint_name):
             },
         )
     else:
-        cp_client.put_job_failure_result(jobId=job_id, failureDetails={'message': f"Failed to create endpoint. Endpoint status: {endpoint_status}", 'type': 'JobFailed'})
+        cp_client.put_job_failure_result(
+            jobId=job_id,
+            failureDetails={
+                "message": f"Failed to create endpoint. Endpoint status: {endpoint_status}",
+                "type": "JobFailed",
+            },
+        )

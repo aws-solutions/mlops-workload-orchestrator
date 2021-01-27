@@ -28,7 +28,7 @@
 set -e
 
 # Important: CDK global version number
-cdk_version=1.70.0
+cdk_version=1.83.0
 
 # Check to see if the required parameters have been provided:
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
@@ -67,10 +67,10 @@ echo "--------------------------------------------------------------------------
 
 echo "cd $source_dir"
 cd $source_dir
-echo "python3 -m venv .env"
-python3 -m venv .env
-echo "source .env/bin/activate"
-source .env/bin/activate
+echo "python3 -m venv .venv-prod"
+python3 -m venv .venv-prod
+echo "source .venv-prod/bin/activate"
+source .venv-prod/bin/activate
 echo "pip install -r requirements.txt"
 pip install -r requirements.txt
 
@@ -114,6 +114,20 @@ echo "cdk synth BYOMBatchBuiltinStack > lib/blueprints/byom/byom_batch_builtin_c
 cdk synth BYOMBatchBuiltinStack > lib/blueprints/byom/byom_batch_builtin_container.yaml
 echo "cdk synth BYOMBatchBuildStack > lib/blueprints/byom/byom_batch_build_container.yaml"
 cdk synth BYOMBatchBuildStack > lib/blueprints/byom/byom_batch_build_container.yaml
+echo "cdk synth ModelMonitorStack > lib/blueprints/byom/model_monitor.yaml"
+cdk synth ModelMonitorStack > lib/blueprints/byom/model_monitor.yaml
+# Replace %%VERSION%% in other templates
+replace="s/%%VERSION%%/$3/g"
+echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_builtin_container.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_realtime_builtin_container.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_build_container.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_realtime_build_container.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_batch_builtin_container.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_batch_builtin_container.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_batch_build_container.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_batch_build_container.yaml
+echo "sed -i -e $replace lib/blueprints/byom/model_monitor.yaml"
+sed -i -e $replace lib/blueprints/byom/model_monitor.yaml
 
 # Run 'cdk synth' for main template to generate raw solution outputs
 echo "cdk synth aws-mlops-framework --output=$staging_dist_dir"
@@ -165,6 +179,7 @@ sed -i -e $replace $template_dist_dir/aws-mlops-framework.template
 replace="s/%%VERSION%%/$3/g"
 echo "sed -i -e $replace $template_dist_dir/aws-mlops-framework.template"
 sed -i -e $replace $template_dist_dir/aws-mlops-framework.template
+
 
 echo "------------------------------------------------------------------------------"
 echo "[Packing] Source code artifacts"

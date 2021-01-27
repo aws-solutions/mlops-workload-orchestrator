@@ -2,7 +2,7 @@
 package-lock.json
 __pycache__
 .pytest_cache
-.env
+.venv-test
 *.egg-info
 .coverage
 
@@ -12,3 +12,12 @@ cdk.out
 
 # Python virtual environment
 lib/**/lambdas/*/python
+
+# Environments
+.env
+env/
+venv/
+.venv*
+ENV/
+env.bak/
+venv.bak/

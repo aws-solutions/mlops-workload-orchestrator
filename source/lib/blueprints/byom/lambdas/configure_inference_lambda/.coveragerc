@@ -1,7 +1,10 @@
 [run]
 omit =
   tests/*
-  */.env/*
+  setup.py
+  */.venv-test/*
   cdk.out/*
   conftest.py
   test_*.py
+source =
+  .

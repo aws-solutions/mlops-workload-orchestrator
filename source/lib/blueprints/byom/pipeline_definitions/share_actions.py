@@ -18,11 +18,11 @@ from aws_cdk import (
     core,
 )
 from aws_solutions_constructs import aws_apigateway_lambda
-from lib.conditional_resource import ConditionalResources
 from lib.blueprints.byom.pipeline_definitions.helpers import (
     codepipeline_policy,
     suppress_cloudwatch_policy,
 )
+
 
 # configure inference lambda step in the pipeline
 def configure_inference(scope, blueprint_bucket):
@@ -42,20 +42,19 @@ def configure_inference(scope, blueprint_bucket):
         lambda_function_props={
             "runtime": lambda_.Runtime.PYTHON_3_8,
             "handler": "main.handler",
-            "code": lambda_.Code.from_bucket(
-                blueprint_bucket, "blueprints/byom/lambdas/inference.zip"
-            ),
+            "code": lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/inference.zip"),
         },
         api_gateway_props={
             "defaultMethodOptions": {
                 "authorizationType": apigw.AuthorizationType.IAM,
             },
             "restApiName": f"{core.Aws.STACK_NAME}-inference",
-            "proxy": False
+            "proxy": False,
         },
     )
-    provision_resource = inference_api_gateway.api_gateway.root.add_resource('inference')
-    provision_resource.add_method('POST')
+
+    provision_resource = inference_api_gateway.api_gateway.root.add_resource("inference")
+    provision_resource.add_method("POST")
     inference_api_gateway.lambda_function.add_to_role_policy(
         iam.PolicyStatement(
             actions=[
@@ -73,17 +72,13 @@ def configure_inference(scope, blueprint_bucket):
         "configure_inference_lambda",
         runtime=lambda_.Runtime.PYTHON_3_8,
         handler="main.handler",
-        code=lambda_.Code.from_bucket(
-            blueprint_bucket, "blueprints/byom/lambdas/configure_inference_lambda.zip"
-        ),
+        code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/configure_inference_lambda.zip"),
         environment={
             "inference_lambda_arn": inference_api_gateway.lambda_function.function_arn,
             "LOG_LEVEL": "INFO",
         },
     )
-    configure_inference_lambda.node.default_child.cfn_options.metadata = (
-        suppress_cloudwatch_policy()
-    )
+    configure_inference_lambda.node.default_child.cfn_options.metadata = suppress_cloudwatch_policy()
     # iam permissions to respond to codepipeline and update inference lambda
     configure_inference_lambda.add_to_role_policy(
         iam.PolicyStatement(
@@ -101,7 +96,10 @@ def configure_inference(scope, blueprint_bucket):
             "rules_to_suppress": [
                 {
                     "id": "W12",
-                    "reason": "The codepipeline permissions PutJobSuccessResult and PutJobFailureResult are not able to be bound to resources.",
+                    "reason": (
+                        "The codepipeline permissions PutJobSuccessResult and PutJobFailureResult "
+                        "are not able to be bound to resources."
+                    ),
                 }
             ]
         }
@@ -116,4 +114,4 @@ def configure_inference(scope, blueprint_bucket):
         lambda_=configure_inference_lambda,
     )
 
-    return configure_inference_action
+    return (configure_inference_lambda.function_arn, configure_inference_action)

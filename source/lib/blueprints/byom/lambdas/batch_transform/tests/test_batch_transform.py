@@ -1,4 +1,4 @@
-##################################################################################################################
+#######################################################################################################################
 #  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
@@ -29,6 +29,7 @@ def mock_env_variables():
         "inference_instance": "ml.m5.4xlarge",
     }
     os.environ = {**os.environ, **new_env}
+
 
 @pytest.fixture
 def sm_expected_params():
@@ -70,21 +71,18 @@ def sm_response_500():
 def cp_expected_params_success():
     return {"jobId": "test_job_id"}
 
+
 @pytest.fixture
 def cp_expected_params_failure():
-    return {
-        "jobId": "test_job_id",
-        "failureDetails": {
-           'message': ANY,
-           'type': 'JobFailed'
-        }
-    }
+    return {"jobId": "test_job_id", "failureDetails": {"message": ANY, "type": "JobFailed"}}
+
 
 @pytest.fixture()
 def event():
     return {
         "CodePipeline.job": {"id": "test_job_id"},
     }
+
 
 @mock_sts
 def test_handler_success(sm_expected_params, sm_response_200, cp_expected_params_success, event):
@@ -108,7 +106,6 @@ def test_handler_success(sm_expected_params, sm_response_200, cp_expected_params
             reset_client()
 
 
-
 @mock_sts
 def test_handler_fail(sm_expected_params, sm_response_500, cp_expected_params_failure, event):
     sm_client = get_client("sagemaker")
@@ -127,6 +124,7 @@ def test_handler_fail(sm_expected_params, sm_response_500, cp_expected_params_fa
             handler(event, {})
             cp_stubber.assert_no_pending_responses()
             reset_client()
+
 
 def test_handler_exception():
     with patch("boto3.client") as mock_client:

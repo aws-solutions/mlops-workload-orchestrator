@@ -22,19 +22,17 @@ sagemaker_client = boto3.client("sagemaker-runtime")
 
 @api_exception_handler
 def handler(event, context):
-
     event_body = json.loads(event["body"])
     endpoint_name = os.environ["ENDPOINT_NAME"]
     return invoke(event_body, endpoint_name)
 
+
 def invoke(event_body, endpoint_name, sm_client=sagemaker_client):
     response = sm_client.invoke_endpoint(
-        EndpointName=endpoint_name,
-        Body=event_body["payload"],
-        ContentType=event_body["ContentType"]
+        EndpointName=endpoint_name, Body=event_body["payload"], ContentType=event_body["ContentType"]
     )
     logger.info(response)
-    predictions = response['Body'].read().decode()
+    predictions = response["Body"].read().decode()
     logger.info(predictions)
     return {
         "statusCode": 200,

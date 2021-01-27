@@ -32,6 +32,24 @@ def source_action(model_artifact_location, assets_bucket):
         output=source_output,
     )
 
+
+def source_action_model_monitor(training_data_location, assets_bucket):
+    """
+    source_action_model_monitor configures a codepipeline action with S3 as source
+
+    :training_data_location: path to the training data in the S3 bucket: assets_bucket
+    :assets_bucket: the bucket cdk object where pipeline assets are stored
+    :return: codepipeline action in a form of a CDK object that can be attached to a codepipeline stage
+    """
+    source_output = codepipeline.Artifact()
+    return source_output, codepipeline_actions.S3SourceAction(
+        action_name="S3Source",
+        bucket=assets_bucket,
+        bucket_key=training_data_location.value_as_string,
+        output=source_output,
+    )
+
+
 def source_action_custom(model_artifact_location, assets_bucket, custom_container):
     """
     source_action configures a codepipeline action with S3 as source

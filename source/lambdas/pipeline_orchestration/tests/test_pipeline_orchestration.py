@@ -1,5 +1,5 @@
-##################################################################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+# #####################################################################################################################
+#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -13,30 +13,45 @@
 import os
 import json
 import datetime
-from unittest.mock import MagicMock, patch
+import pytest
+from unittest.mock import patch
+from unittest import TestCase
 import botocore.session
-from botocore.stub import Stubber, ANY
+from botocore.stub import Stubber
 from pipeline_orchestration.index import (
     handler,
     provision_pipeline,
     pipeline_status,
     DateTimeEncoder,
+    get_template_parameters,
+    get_required_keys,
+    template_url,
+    validate,
 )
-
-mock_env_variables = {
-    "NOTIFICATION_EMAIL": "test@example.com",
-    "BLUEPRINT_BUCKET": "testbucket",
-    "BLUEPRINT_BUCKET_URL": "testurl",
-    "ACCESS_BUCKET": "testaccessbucket",
-    "PIPELINE_STACK_NAME": "teststack",
-    "CFN_ROLE_ARN": "arn:aws:role:region:account:action",
-}
+from shared.wrappers import BadRequest
+from tests.fixtures.orchestrator_fixtures import (
+    mock_env_variables,
+    api_byom_event,
+    required_api_byom_realtime_builtin,
+    required_api_byom_batch_builtin,
+    required_api_byom_realtime_custom,
+    required_api_byom_batch_custom,
+    api_model_monitor_event,
+    required_api_keys_model_monitor,
+    template_parameters_common,
+    template_parameters_realtime_builtin,
+    template_parameters_batch_builtin,
+    template_parameters_realtime_custom,
+    template_parameters_batch_custom,
+    generate_names,
+    template_parameters_model_monitor,
+    get_parameters_keys,
+    cf_client_params,
+)
 
 
 def test_handler():
-    with patch(
-        "pipeline_orchestration.index.provision_pipeline"
-    ) as mock_provision_pipeline:
+    with patch("pipeline_orchestration.index.provision_pipeline") as mock_provision_pipeline:
         event = {
             "httpMethod": "POST",
             "path": "/provisionpipeline",
@@ -57,7 +72,10 @@ def test_handler():
             "statusCode": 400,
             "isBase64Encoded": False,
             "body": json.dumps(
-                {"message": "Bad request format. Expected httpMethod or pipeline_type, recevied none. Check documentation for API & config formats."}
+                {
+                    "message": "Bad request format. Expected httpMethod or pipeline_type, recevied none. "
+                    + "Check documentation for API & config formats."
+                }
             ),
             "headers": {"Content-Type": "plain/text"},
         }
@@ -72,8 +90,7 @@ def test_handler():
         mock_pipeline_status.assert_called_with(json.loads(event["body"]))
 
 
-@patch.dict(os.environ, mock_env_variables)
-def test_provision_pipeline():
+def test_provision_pipeline(cf_client_params, api_byom_event):
 
     client = botocore.session.get_session().create_client("cloudformation")
     cp_client = botocore.session.get_session().create_client("codepipeline")
@@ -81,96 +98,14 @@ def test_provision_pipeline():
     stubber = Stubber(client)
     cp_stubber = Stubber(cp_client)
     cfn_response = {"StackId": "1234"}
-    expected_params = {
-        "Capabilities": ["CAPABILITY_IAM"],
-        "OnFailure": "DO_NOTHING",
-        "Parameters": [
-            {
-                "ParameterKey": "NOTIFICATIONEMAIL",
-                "ParameterValue": "test@example.com",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "BLUEPRINTBUCKET",
-                "ParameterValue": "testbucket",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "ACCESSBUCKET",
-                "ParameterValue": "testaccessbucket",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "CUSTOMCONTAINER",
-                "ParameterValue": "",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "MODELFRAMEWORK",
-                "ParameterValue": "xgboost",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "MODELFRAMEWORKVERSION",
-                "ParameterValue": "1.0-1",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "MODELNAME",
-                "ParameterValue": "testmodel",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "MODELARTIFACTLOCATION",
-                "ParameterValue": "model.tar.gz",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "TRAININGDATA",
-                "ParameterValue": "training/data.csv",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "INFERENCEINSTANCE",
-                "ParameterValue": "ml.m5.large",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "INFERENCETYPE",
-                "ParameterValue": "realtime",
-                "UsePreviousValue": True,
-            },
-            {
-                "ParameterKey": "BATCHINFERENCEDATA",
-                "ParameterValue": "inference/data.csv",
-                "UsePreviousValue": True,
-            },
-        ],
-        "RoleARN": "arn:aws:role:region:account:action",
-        "StackName": "teststack-testmodel",
-        "Tags": [{"Key": "purpose", "Value": "test"}],
-        "TemplateURL": "https://testurl/blueprints/byom/byom_realtime_builtin_container.yaml",
-    }
+    expected_params = cf_client_params
     expected_response = {
         "statusCode": 200,
         "isBase64Encoded": False,
-        "body": json.dumps(
-            {"message": "success: stack creation started", "pipeline_id": "1234"}
-        ),
+        "body": json.dumps({"message": "success: stack creation started", "pipeline_id": "1234"}),
         "headers": {"Content-Type": "plain/text"},
     }
-    event = {
-        "pipeline_type": "byom",
-        "custom_model_container": "",
-        "model_framework": "xgboost",
-        "model_framework_version": "1.0-1",
-        "model_name": "testmodel",
-        "model_artifact_location": "model.tar.gz",
-        "training_data": "training/data.csv",
-        "inference_instance": "ml.m5.large",
-        "inference_type": "realtime",
-        "batch_inference_data": "inference/data.csv",
-    }
+    event = api_byom_event("realtime", "xgboost")
     cfn_response = {"StackId": "1234"}
     stubber.add_response("create_stack", cfn_response, expected_params)
     with stubber:
@@ -261,7 +196,133 @@ def test_pipeline_status():
 
     with cfn_stubber:
         with cp_stubber:
-            response = pipeline_status(
-                event, cfn_client=cfn_client, cp_client=cp_client
-            )
+            response = pipeline_status(event, cfn_client=cfn_client, cp_client=cp_client)
             assert response == expected_response
+
+
+def test_get_required_keys(
+    api_byom_event,
+    api_model_monitor_event,
+    required_api_byom_realtime_builtin,
+    required_api_byom_batch_builtin,
+    required_api_byom_realtime_custom,
+    required_api_byom_batch_custom,
+    required_api_keys_model_monitor,
+):
+    # Required keys in byom, realtime, builtin
+    returned_keys = get_required_keys(api_byom_event("realtime", "xgboost"))
+    expected_keys = required_api_byom_realtime_builtin
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in byom, batch, builtin
+    returned_keys = get_required_keys(api_byom_event("batch", "xgboost"))
+    expected_keys = required_api_byom_batch_builtin
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in byom, realtime, custom
+    returned_keys = get_required_keys(api_byom_event("realtime", ""))
+    expected_keys = required_api_byom_realtime_custom
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in byom, batch, custom
+    returned_keys = get_required_keys(api_byom_event("batch", ""))
+    expected_keys = required_api_byom_batch_custom
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in model_monitor, default (no monitoring_type provided)
+    returned_keys = get_required_keys(api_model_monitor_event())
+    expected_keys = required_api_keys_model_monitor()
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in model_monitor, with monitoring_type provided
+    returned_keys = get_required_keys(api_model_monitor_event("modelquality"))
+    expected_keys = required_api_keys_model_monitor(False)
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # assert for exceptions
+    with pytest.raises(BadRequest) as exceinfo:
+        get_required_keys({"pipeline_type": "not_supported"})
+    assert (
+        str(exceinfo.value)
+        == "Bad request format. Pipeline type not supported. Check documentation for API & config formats"
+    )
+    with pytest.raises(BadRequest) as exceinfo:
+        get_required_keys({"pipeline_type": "model_monitor", "monitoring_type": "not_supported"})
+    assert (
+        str(exceinfo.value)
+        == "Bad request. MonitoringType supported are 'DataQuality'|'ModelQuality'|'ModelBias'|'ModelExplainability'"
+    )
+    with pytest.raises(BadRequest) as exceinfo:
+        get_required_keys({"pipeline_type": "byom"})
+    assert str(exceinfo.value) == "Bad request. missing keys for byom"
+
+
+def test_template_url():
+    # model monitor CF template
+    assert (
+        template_url("", "", "model_monitor")
+        == "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom/model_monitor.yaml"
+    )
+    # realtime/builtin CF template
+    assert (
+        template_url("realtime", "", "byom")
+        == "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom/byom_realtime_builtin_container.yaml"
+    )
+    # batch/builtin CF template
+    assert (
+        template_url("batch", "", "byom")
+        == "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom/byom_batch_builtin_container.yaml"
+    )
+    # realtime/custom CF template
+    assert (
+        template_url("realtime", "my_custom_image.zip", "byom")
+        == "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom/byom_realtime_build_container.yaml"
+    )
+    # batch/custom CF template
+    assert (
+        template_url("batch", "my_custom_image.zip", "byom")
+        == "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom/byom_batch_build_container.yaml"
+    )
+    # assert for exceptions
+    with pytest.raises(BadRequest) as exceinfo:
+        template_url("notsupported", "my_custom_image.zip", "byom")
+    assert str(exceinfo.value) == "Bad request format. Inference type must be 'realtime' or 'batch'"
+
+
+def test_get_template_parameters(
+    template_parameters_realtime_builtin,
+    template_parameters_batch_builtin,
+    template_parameters_realtime_custom,
+    template_parameters_batch_custom,
+    template_parameters_model_monitor,
+    api_byom_event,
+    api_model_monitor_event,
+    get_parameters_keys,
+):
+    # assert template parameters: realtime/builtin
+    _, returned_parameters = get_template_parameters(api_byom_event("realtime", "xgboost"))
+    expected_parameters = template_parameters_realtime_builtin(api_byom_event("realtime", "xgboost"))
+    TestCase().assertCountEqual(get_parameters_keys(expected_parameters), get_parameters_keys(returned_parameters))
+    # assert template parameters: batch/builtin
+    _, returned_parameters = get_template_parameters(api_byom_event("batch", "xgboost"))
+    expected_parameters = template_parameters_batch_builtin(api_byom_event("batch", "xgboost"))
+    TestCase().assertCountEqual(get_parameters_keys(expected_parameters), get_parameters_keys(returned_parameters))
+    # assert template parameters: realtime/custom
+    _, returned_parameters = get_template_parameters(api_byom_event("realtime", ""))
+    expected_parameters = template_parameters_realtime_custom(api_byom_event("realtime", ""))
+    TestCase().assertCountEqual(get_parameters_keys(expected_parameters), get_parameters_keys(returned_parameters))
+    # assert template parameters: batch/custom
+    _, returned_parameters = get_template_parameters(api_byom_event("batch", ""))
+    expected_parameters = template_parameters_batch_custom(api_byom_event("batch", ""))
+    TestCase().assertCountEqual(get_parameters_keys(expected_parameters), get_parameters_keys(returned_parameters))
+    # assert template parameters: model monitor
+    _, returned_parameters = get_template_parameters(api_model_monitor_event())
+    expected_parameters = template_parameters_model_monitor(api_model_monitor_event())
+    TestCase().assertCountEqual(get_parameters_keys(expected_parameters), get_parameters_keys(returned_parameters))
+
+
+def test_validate(api_byom_event):
+    # event with required keys
+    valid_event = api_byom_event("batch", "xgboost")
+    TestCase().assertDictEqual(validate(valid_event), valid_event)
+    # event with missing required keys
+    bad_event = api_byom_event("batch", "xgboost")
+    # remove required key
+    del bad_event["model_artifact_location"]
+    with pytest.raises(BadRequest) as execinfo:
+        validate(bad_event)
+    assert str(execinfo.value) == "Bad request. API body does not have the necessary parameter: model_artifact_location"

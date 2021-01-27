@@ -17,56 +17,66 @@ from crhelper import CfnResource
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-helper = CfnResource(json_logging=True, log_level='INFO')
+helper = CfnResource(json_logging=True, log_level="INFO")
+
 
 def _sanitize_data(resource_properties):
     # Remove ServiceToken (lambda arn) to avoid sending AccountId
-    resource_properties.pop('ServiceToken', None)
-    resource_properties.pop('Resource', None)
+    resource_properties.pop("ServiceToken", None)
+    resource_properties.pop("Resource", None)
 
     # Solution ID and unique ID are sent separately
-    resource_properties.pop('SolutionId', None)
-    resource_properties.pop('UUID', None)
+    resource_properties.pop("SolutionId", None)
+    resource_properties.pop("UUID", None)
 
     return resource_properties
+
 
 @helper.create
 @helper.update
 @helper.delete
 def custom_resource(event, _):
-    request_type = event['RequestType']
-    resource_properties = event['ResourceProperties']
-    resource = resource_properties['Resource']
+    request_type = event["RequestType"]
+    resource_properties = event["ResourceProperties"]
+    resource = resource_properties["Resource"]
 
-    if resource == 'UUID' and request_type == 'Create':
+    if resource == "UUID" and request_type == "Create":
         random_id = str(uuid.uuid4())
-        helper.Data.update({ 'UUID': random_id })
-    elif resource == 'AnonymousMetric':
+        helper.Data.update({"UUID": random_id})
+    elif resource == "AnonymousMetric":
         try:
             metrics_data = _sanitize_data(copy(resource_properties))
-            metrics_data['RequestType'] = request_type
+            metrics_data["RequestType"] = request_type
 
-            headers = { 'Content-Type': 'application/json' }
+            headers = {"Content-Type": "application/json"}
             git_selected = ""
-            if len(resource_properties['gitSelected']) > 0:
+            if len(resource_properties["gitSelected"]) > 0:
                 git_selected = "True"
             else:
                 git_selected = "False"
+            # see if the customer provided an existing S3 bucket name
+            existing_bucket_selected = ""
+            if len(resource_properties["bucketSelected"]) > 0:
+                existing_bucket_selected = "True"
+            else:
+                existing_bucket_selected = "False"
             payload = {
-                'Solution': resource_properties['SolutionId'],
-                'gitSelected': git_selected,
-                'UUID': resource_properties['UUID'],
-                'TimeStamp': datetime.utcnow().isoformat(),
-                'Data': metrics_data
+                "Solution": resource_properties["SolutionId"],
+                "gitSelected": git_selected,
+                "bucketSelected": existing_bucket_selected,
+                "UUID": resource_properties["UUID"],
+                "TimeStamp": datetime.utcnow().isoformat(),
+                "Data": metrics_data,
             }
 
-            logger.info(f'Sending payload: {payload}')
-            response = requests.post('https://metrics.awssolutionsbuilder.com/generic', json=payload, headers=headers)
-            logger.info(f'Response from metrics endpoint: {response.status_code} {response.reason}')
+            logger.info(f"Sending payload: {payload}")
+            response = requests.post("https://metrics.awssolutionsbuilder.com/generic", json=payload, headers=headers)
+            logger.info(f"Response from metrics endpoint: {response.status_code} {response.reason}")
         except requests.exceptions.RequestException:
-            logger.exception('Could not send usage data')
+            logger.exception("Could not send usage data")
         except Exception:
-            logger.exception('Unknown error when trying to send usage data')
+            logger.exception("Unknown error when trying to send usage data")
+
 
 def handler(event, context):
     helper(event, context)

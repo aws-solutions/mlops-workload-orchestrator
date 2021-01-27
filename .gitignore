@@ -21,6 +21,28 @@ open-source/
 
 source/lambda/layers/*
 
+# Coverage directory used by tools like istanbul
+coverage-reports/
+coverage
+*.lcov
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# linting, scanning configurations, sonarqube
+.scannerwork/
+
 .DS_Store
 
 # Temporary folders
