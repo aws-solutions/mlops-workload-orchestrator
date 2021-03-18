@@ -102,7 +102,7 @@ _Note:_ You would have to create an S3 bucket with the prefix 'my-bucket-name-<a
 - Now build the distributable:
 
 ```
-chmod +x ./build-s3-dist.sh \n
+cd deployment && chmod +x ./build-s3-dist.sh \n
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET $SOLUTION_NAME $VERSION \n
 ```
 
