@@ -18,9 +18,7 @@ from aws_cdk import (
     aws_codepipeline_actions as codepipeline_actions,
     core,
 )
-from lib.blueprints.byom.pipeline_definitions.helpers import (
-    suppress_pipeline_policy,
-)
+from lib.blueprints.byom.pipeline_definitions.helpers import suppress_pipeline_policy, suppress_ecr_scan_on_push
 
 
 def build_action(scope, source_output):
@@ -34,7 +32,9 @@ def build_action(scope, source_output):
     """
     model_containers = ecr.Repository(scope, "awsmlopsmodels")
     # Enable ECR image scanOnPush
-    model_containers.node.default_child.add_override("Properties.ImageScanningConfiguration.scanOnPush", "true")
+    model_containers.node.default_child.add_override("Properties.ImageScanningConfiguration.ScanOnPush", "true")
+    # ECR scanOnPush property has changed to ScanOnPush, bbut seems cfn_nag still checking for scanOnPush
+    model_containers.node.default_child.cfn_options.metadata = suppress_ecr_scan_on_push()
 
     codebuild_role = iam.Role(scope, "codebuildRole", assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"))
 

@@ -106,7 +106,12 @@ def create_model(
             "ecr:DescribeRepositories",
             "ecr:GetDownloadUrlForLayer",
         ],
-        resources=[f"arn:{core.Aws.PARTITION}:ecr:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:repository/awsmlopsmodels*"],
+        resources=[
+            (
+                f"arn:{core.Aws.PARTITION}:ecr:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}"
+                f":repository/mlops-pipeline*-awsmlopsmodels*"
+            )
+        ],
     )
     ecr_token_policy = iam.PolicyStatement(
         actions=["ecr:GetAuthorizationToken"],

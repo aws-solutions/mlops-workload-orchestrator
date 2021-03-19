@@ -216,6 +216,22 @@ def suppress_ecr_policy():
     }
 
 
+# The supression is needed because there is a bug in cfn_nag ECR repository rule W79,
+# where the rule still checks for scanOnPush instead of the new property's name ScanOnPush
+# link to the bug  https://github.com/stelligent/cfn_nag/issues/533
+def suppress_ecr_scan_on_push():
+    return {
+        "cfn_nag": {
+            "rules_to_suppress": [
+                {
+                    "id": "W79",
+                    "reason": "scanOnPush is enabled",
+                }
+            ]
+        }
+    }
+
+
 def apply_secure_bucket_policy(bucket):
     bucket.add_to_resource_policy(
         iam.PolicyStatement(

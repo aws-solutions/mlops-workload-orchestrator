@@ -391,7 +391,7 @@ def get_template_parameters(event):
             "Bad request format. Pipeline type not supported. Check documentation for API & config formats."
         )
 
-    return (provisioned_pipeline_stack_name, template_parameters)
+    return (provisioned_pipeline_stack_name.lower(), template_parameters)
 
 
 def get_required_keys(event):

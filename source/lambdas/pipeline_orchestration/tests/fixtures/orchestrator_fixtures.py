@@ -386,8 +386,8 @@ def cf_client_params(api_byom_event, template_parameters_realtime_builtin):
         "OnFailure": "DO_NOTHING",
         "Parameters": template_parameters,
         "RoleARN": "arn:aws:role:region:account:action",
-        "StackName": "teststack-testmodel-BYOMPipelineReatimeBuiltIn",
-        "Tags": [{"Key": "stack_name", "Value": "teststack-testmodel-BYOMPipelineReatimeBuiltIn"}],
+        "StackName": "teststack-testmodel-byompipelinereatimebuiltin",
+        "Tags": [{"Key": "stack_name", "Value": "teststack-testmodel-byompipelinereatimebuiltin"}],
         "TemplateURL": "https://testurl/blueprints/byom/byom_realtime_builtin_container.yaml",
     }
     return cf_params

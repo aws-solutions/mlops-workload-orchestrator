@@ -94,7 +94,7 @@ class MLOpsStack(core.Stack):
             expression=core.Fn.condition_equals(existing_bucket.value_as_string.strip(), ""),
         )
         # Constants
-        pipeline_stack_name = "MLOps-pipeline"
+        pipeline_stack_name = "mlops-pipeline"
 
         # CDK Resources setup
         access_logs_bucket = s3.Bucket(
@@ -234,10 +234,12 @@ class MLOpsStack(core.Stack):
                         "ecr:DeleteRepository",
                         "ecr:DescribeRepositories",
                     ],
+                    # The * is needed in front of awsmlopsmodels because AWS-ECR CDK adds
+                    # the stack's name in front of the ECR repository's name
                     resources=[
                         (
                             f"arn:{core.Aws.PARTITION}:ecr:{core.Aws.REGION}:"
-                            f"{core.Aws.ACCOUNT_ID}:repository/awsmlopsmodels*"
+                            f"{core.Aws.ACCOUNT_ID}:repository/{pipeline_stack_name}*-awsmlopsmodels*"
                         )
                     ],
                 ),
