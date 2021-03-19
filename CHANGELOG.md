@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Updated
 
 - AWS ECR image scan on push property's name from `scanOnPush` to `ScanOnPush` for image scanning based on the recently updated property name in AWS CloudFormation.
-- AWS ECR repository's name in the IAM policy's resource name from `<repository-name>*` to `*<repository-name>*` to accommodate recent repository name being prefixed with AWS CloudFormation stack name.
+- AWS ECR repository's name in the IAM policy's resource name from `<repository-name>*` to `<pipeline_stack_name>*-<repository-name>*` to accommodate recent repository name being prefixed with AWS CloudFormation stack name.
 
 ## [1.1.0] - 2021-01-26
 
