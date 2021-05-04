@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -11,58 +11,48 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 import os
-from time import gmtime, strftime
-import boto3
 import uuid
-from shared.wrappers import code_pipeline_exception_handler
 from shared.logger import get_logger
 from shared.helper import get_client
 
 logger = get_logger(__name__)
 sm_client = get_client("sagemaker")
-cp_client = get_client("codepipeline")
 
 
-@code_pipeline_exception_handler
 def handler(event, context):
-    # todo: change the way to mock boto3 clients for unit tests without passing clients in input
+    try:
+        model_name = os.environ.get("model_name").lower()
+        batch_inference_data = os.environ.get("batch_inference_data")
+        batch_job_output_location = os.environ.get("batch_job_output_location")
+        inference_instance = os.environ.get("inference_instance")
+        kms_key_arn = os.environ.get("kms_key_arn")
+        batch_job_name = f"{model_name}-batch-transform-{str(uuid.uuid4())[:8]}"
 
-    # Extract the Job ID
-    job_id = event["CodePipeline.job"]["id"]
-    prefix = "batch_transform"
-    model_name = os.environ.get("model_name")
-    assets_bucket = os.environ.get("assets_bucket")
-    batch_data = os.environ.get("batch_inference_data")
-    inference_instance = os.environ.get("inference_instance")
+        request = {
+            "TransformJobName": batch_job_name,
+            "ModelName": model_name,
+            "TransformOutput": {
+                "S3OutputPath": f"s3://{batch_job_output_location}",
+                "Accept": "text/csv",
+                "AssembleWith": "Line",
+            },
+            "TransformInput": {
+                "DataSource": {"S3DataSource": {"S3DataType": "S3Prefix", "S3Uri": f"s3://{batch_inference_data}"}},
+                "ContentType": "text/csv",
+                "SplitType": "Line",
+                "CompressionType": "None",
+            },
+            "TransformResources": {"InstanceType": inference_instance, "InstanceCount": 1},
+        }
+        # add KmsKey if provided by the customer
+        if kms_key_arn:
+            request["TransformOutput"].update({"KmsKeyId": kms_key_arn})
+            request["TransformResources"].update({"VolumeKmsKeyId": kms_key_arn})
 
-    batch_job_name = f"{model_name}-batch-transform-{str(uuid.uuid4())[:8]}"
-    output_location = f"s3://{assets_bucket}/{prefix}/output/{batch_job_name}"
+        response = sm_client.create_transform_job(**request)
+        logger.info(f"Response from create transform job request. response: {response}")
+        logger.info(f"Created Transform job with name: {batch_job_name}")
 
-    request = {
-        "TransformJobName": batch_job_name,
-        "ModelName": model_name,
-        "TransformOutput": {
-            "S3OutputPath": output_location,
-            "Accept": "text/csv",
-            "AssembleWith": "Line",
-        },
-        "TransformInput": {
-            "DataSource": {"S3DataSource": {"S3DataType": "S3Prefix", "S3Uri": f"s3://{assets_bucket}/{batch_data}"}},
-            "ContentType": "text/csv",
-            "SplitType": "Line",
-            "CompressionType": "None",
-        },
-        "TransformResources": {"InstanceType": inference_instance, "InstanceCount": 1},
-    }
-
-    response = sm_client.create_transform_job(**request)
-    logger.info(f"Response from create transform job request. response: {response}")
-    logger.info(f"Created Transform job with name: {batch_job_name}")
-
-    if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-        cp_client.put_job_success_result(jobId=job_id)
-        logger.info(f"Sent success message back to codepipeline with job_id: {job_id}")
-    else:
-        cp_client.put_job_failure_result(
-            jobId=job_id, failureDetails={"message": "Job failed. Check the logs for more info.", "type": "JobFailed"}
-        )
+    except Exception as e:
+        logger.error(f"Error creating the batch transform job {batch_job_name}: {str(e)}")
+        raise e

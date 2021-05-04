@@ -12,29 +12,23 @@
 # #####################################################################################################################
 from aws_cdk import (
     aws_iam as iam,
-    aws_ecr as ecr,
     aws_codebuild as codebuild,
     aws_codepipeline as codepipeline,
     aws_codepipeline_actions as codepipeline_actions,
     core,
 )
-from lib.blueprints.byom.pipeline_definitions.helpers import suppress_pipeline_policy, suppress_ecr_scan_on_push
+from lib.blueprints.byom.pipeline_definitions.helpers import suppress_pipeline_policy
 
 
-def build_action(scope, source_output):
+def build_action(scope, ecr_repository_name, image_tag, source_output):
     """
-    build_action configures a codepipeline action that takes Dockerfile and creates a container image
+    build_action configures a codepipeline action with repository name and tag
 
     :scope: CDK Construct scope that's needed to create CDK resources
-    :source_output: output of the source stage in codepipeline
-    :is_custom_container: a CDK CfnCondition object, if true, it creates resources for the pipeline action
+    :ecr_repository_name: name of Amazon ECR repository where the image will be stored
+    :image_tag: docker image tag to be assigned.
     :return: codepipeline action in a form of a CDK object that can be attached to a codepipeline stage
     """
-    model_containers = ecr.Repository(scope, "awsmlopsmodels")
-    # Enable ECR image scanOnPush
-    model_containers.node.default_child.add_override("Properties.ImageScanningConfiguration.ScanOnPush", "true")
-    # ECR scanOnPush property has changed to ScanOnPush, bbut seems cfn_nag still checking for scanOnPush
-    model_containers.node.default_child.cfn_options.metadata = suppress_ecr_scan_on_push()
 
     codebuild_role = iam.Role(scope, "codebuildRole", assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"))
 
@@ -47,7 +41,7 @@ def build_action(scope, source_output):
             "ecr:UploadLayerPart",
         ],
         resources=[
-            model_containers.repository_arn,
+            f"arn:{core.Aws.PARTITION}:ecr:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:repository/{ecr_repository_name}",
         ],
     )
     codebuild_role.add_to_policy(codebuild_policy)
@@ -103,8 +97,8 @@ def build_action(scope, source_output):
             environment_variables={
                 "AWS_DEFAULT_REGION": {"value": core.Aws.REGION},
                 "AWS_ACCOUNT_ID": {"value": core.Aws.ACCOUNT_ID},
-                "IMAGE_REPO_NAME": {"value": model_containers.repository_name},
-                "IMAGE_TAG": {"value": "latest"},
+                "IMAGE_REPO_NAME": {"value": ecr_repository_name},
+                "IMAGE_TAG": {"value": image_tag},
             },
             privileged=True,
         ),
@@ -116,7 +110,5 @@ def build_action(scope, source_output):
         input=source_output,
         outputs=[codepipeline.Artifact()],
     )
-    container_uri = (
-        f"{core.Aws.ACCOUNT_ID}.dkr.ecr.{core.Aws.REGION}.amazonaws.com/{model_containers.repository_name}:latest"
-    )
+    container_uri = f"{core.Aws.ACCOUNT_ID}.dkr.ecr.{core.Aws.REGION}.amazonaws.com/{ecr_repository_name}:{image_tag}"
     return build_action_definition, container_uri

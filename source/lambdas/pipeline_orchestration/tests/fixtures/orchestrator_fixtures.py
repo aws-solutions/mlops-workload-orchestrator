@@ -1,5 +1,5 @@
 #######################################################################################################################
-#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -13,6 +13,7 @@
 import os
 import pytest
 import uuid
+import json
 
 
 @pytest.fixture(autouse=True)
@@ -21,37 +22,219 @@ def mock_env_variables():
     os.environ["NOTIFICATION_EMAIL"] = "test@example.com"
     os.environ["ASSETS_BUCKET"] = "testassetsbucket"
     os.environ["BLUEPRINT_BUCKET"] = "testbucket"
-    os.environ["PIPELINE_STACK_NAME"] = "teststack"
+    os.environ["PIPELINE_STACK_NAME"] = "mlops-pipeline"
     os.environ["CFN_ROLE_ARN"] = "arn:aws:role:region:account:action"
+    os.environ["IS_MULTI_ACCOUNT"] = "False"
+    os.environ["REGION"] = "us-east-1"
+    os.environ["ECR_REPO_ARN"] = "test-ecr-repo"
+    os.environ["DEV_ACCOUNT_ID"] = "dev_account_id"
+    os.environ["STAGING_ACCOUNT_ID"] = "staging_account_id"
+    os.environ["PROD_ACCOUNT_ID"] = "prod_account_id"
+    os.environ["DEV_ORG_ID"] = "dev_org_id"
+    os.environ["STAGING_ORG_ID"] = "staging_org_id"
+    os.environ["PROD_ORG_ID"] = "prod_org_id"
+    os.environ["MODELARTIFACTLOCATION"] = "model.tar.gz"
+    os.environ["INSTANCETYPE"] = "ml.m5.large"
+    os.environ["INFERENCEDATA"] = "inference/data.csv"
+    os.environ["BATCHOUTPUT"] = "bucket/output"
+    os.environ["DATACAPTURE"] = "bucket/datacapture"
+    os.environ["TRAININGDATA"] = "model_monitor/training-dataset-with-header.csv"
+    os.environ["BASELINEOUTPUT"] = "testbucket/model_monitor/baseline_output2"
+    os.environ["SCHEDULEEXP"] = "cron(0 * ? * * *)"
+    os.environ["CUSTOMIMAGE"] = "custom/custom_image.zip"
+    os.environ["TESTFILE"] = "testfile.zip"
 
 
 @pytest.fixture
 def api_byom_event():
-    def _api_byom_event(inference_type, model_framework):
+    def _api_byom_event(pipeline_type, is_multi=False):
         event = {
-            "pipeline_type": "byom",
+            "pipeline_type": pipeline_type,
             "model_name": "testmodel",
-            "model_artifact_location": "model.tar.gz",
-            "inference_instance": "ml.m5.large",
+            "model_artifact_location": os.environ["MODELARTIFACTLOCATION"],
         }
+        if is_multi:
+            event["inference_instance"] = {
+                "dev": os.environ["INSTANCETYPE"],
+                "staging": os.environ["INSTANCETYPE"],
+                "prod": os.environ["INSTANCETYPE"],
+            }
+        else:
+            event["inference_instance"] = os.environ["INSTANCETYPE"]
+        if pipeline_type in ["byom_batch_builtin", "byom_batch_custom"]:
+            event["batch_inference_data"] = os.environ["INFERENCEDATA"]
+            if is_multi:
+                event["batch_job_output_location"] = {
+                    "dev": "bucket/dev_output",
+                    "staging": "bucket/staging_output",
+                    "prod": "bucket/prod_output",
+                }
+            else:
+                event["batch_job_output_location"] = os.environ["BATCHOUTPUT"]
+        if pipeline_type in ["byom_realtime_builtin", "byom_realtime_custom"]:
+            if is_multi:
+                event["data_capture_location"] = {
+                    "dev": "bucket/dev_datacapture",
+                    "staging": "bucket/staging_datacapture",
+                    "prod": "bucket/prod_datacapture",
+                }
+            else:
+                event["data_capture_location"] = os.environ["DATACAPTURE"]
 
-        event["inference_type"] = inference_type
-        if inference_type == "batch" and model_framework != "":
-            event["batch_inference_data"] = "inference/data.csv"
+        if pipeline_type in ["byom_realtime_builtin", "byom_batch_builtin"]:
             event["model_framework"] = "xgboost"
             event["model_framework_version"] = "0.90-1"
-        elif inference_type == "realtime" and model_framework != "":
-            event["model_framework"] = "xgboost"
-            event["model_framework_version"] = "0.90-1"
+        elif pipeline_type in ["byom_realtime_custom", "byom_batch_custom"]:
+            event["custom_image_uri"] = "custom-image-uri"
 
-        elif inference_type == "batch" and model_framework == "":
-            event["custom_model_container"] = "my_custom_image.zip"
-            event["batch_inference_data"] = "inference/data.csv"
-        elif inference_type == "realtime" and model_framework == "":
-            event["custom_model_container"] = "my_custom_image.zip"
         return event
 
     return _api_byom_event
+
+
+@pytest.fixture
+def api_monitor_event():
+    return {
+        "pipeline_type": "byom_model_monitor",
+        "model_name": "testmodel",
+        "endpoint_name": "test_endpoint",
+        "training_data": os.environ["TRAININGDATA"],
+        "baseline_job_output_location": os.environ["BASELINEOUTPUT"],
+        "monitoring_output_location": "testbucket/model_monitor/monitor_output",
+        "data_capture_location": "testbucket/xgboost/datacapture",
+        "schedule_expression": os.environ["SCHEDULEEXP"],
+        "instance_type": os.environ["INSTANCETYPE"],
+        "instance_volume_size": "20",
+        "max_runtime_seconds": "3600",
+    }
+
+
+@pytest.fixture
+def api_image_builder_event():
+    return {
+        "pipeline_type": "byom_image_builder",
+        "custom_algorithm_docker": os.environ["CUSTOMIMAGE"],
+        "ecr_repo_name": "mlops-ecrrep",
+        "image_tag": "tree",
+    }
+
+
+@pytest.fixture
+def expected_params_realtime_custom():
+    return [
+        ("ASSETSBUCKET", "testassetsbucket"),
+        ("KMSKEYARN", ""),
+        ("BLUEPRINTBUCKET", "testbucket"),
+        ("MODELNAME", "testmodel"),
+        ("MODELARTIFACTLOCATION", os.environ["MODELARTIFACTLOCATION"]),
+        ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
+        ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
+        ("IMAGEURI", "custom-image-uri"),
+        ("DATACAPTURELOCATION", os.environ["DATACAPTURE"]),
+    ]
+
+
+@pytest.fixture
+def expected_model_monitor_params():
+    return [
+        ("BASELINEJOBNAME", "test_endpoint-baseline-job-ec3a"),
+        ("BASELINEOUTPUTBUCKET", "testbucket"),
+        ("BASELINEJOBOUTPUTLOCATION", os.environ["BASELINEOUTPUT"]),
+        ("DATACAPTUREBUCKET", "testbucket"),
+        ("DATACAPTURELOCATION", os.environ["BASELINEOUTPUT"]),
+        ("ENDPOINTNAME", "test_endpoint"),
+        ("IMAGEURI", "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer:latest"),
+        ("INSTANCETYPE", os.environ["INSTANCETYPE"]),
+        ("INSTANCEVOLUMESIZE", "20"),
+        ("MAXRUNTIMESECONDS", "3600"),
+        ("MONITORINGOUTPUTLOCATION", "testbucket/model_monitor/monitor_output"),
+        ("MONITORINGSCHEDULENAME", "test_endpoint-monitor-2a87"),
+        ("MONITORINGTYPE", "dataquality"),
+        ("SCHEDULEEXPRESSION", os.environ["SCHEDULEEXP"]),
+        ("TRAININGDATA", os.environ["TRAININGDATA"]),
+    ]
+
+
+@pytest.fixture
+def expected_common_realtime_batch_params():
+    return [
+        ("MODELNAME", "testmodel"),
+        ("MODELARTIFACTLOCATION", os.environ["MODELARTIFACTLOCATION"]),
+        ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
+        ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
+        ("IMAGEURI", "custom-image-uri"),
+    ]
+
+
+@pytest.fixture
+def expected_image_builder_params():
+    return [
+        ("NOTIFICATIONEMAIL", os.environ["NOTIFICATION_EMAIL"]),
+        ("ASSETSBUCKET", "testassetsbucket"),
+        ("CUSTOMCONTAINER", os.environ["CUSTOMIMAGE"]),
+        ("ECRREPONAME", "mlops-ecrrep"),
+        ("IMAGETAG", "tree"),
+    ]
+
+
+@pytest.fixture
+def expected_realtime_specific_params():
+    return [("DATACAPTURELOCATION", os.environ["DATACAPTURE"])]
+
+
+@pytest.fixture
+def expect_single_account_params_format():
+    return {
+        "Parameters": {
+            "NOTIFICATIONEMAIL": os.environ["NOTIFICATION_EMAIL"],
+            "ASSETSBUCKET": "testassetsbucket",
+            "CUSTOMCONTAINER": os.environ["CUSTOMIMAGE"],
+            "ECRREPONAME": "mlops-ecrrep",
+            "IMAGETAG": "tree",
+        }
+    }
+
+
+@pytest.fixture
+def stack_name():
+    return "teststack-testmodel-byompipelineimagebuilder"
+
+
+@pytest.fixture
+def expected_multi_account_params_format():
+    return [
+        {"ParameterKey": "NOTIFICATIONEMAIL", "ParameterValue": os.environ["NOTIFICATION_EMAIL"]},
+        {"ParameterKey": "ASSETSBUCKET", "ParameterValue": "testassetsbucket"},
+        {"ParameterKey": "CUSTOMCONTAINER", "ParameterValue": os.environ["CUSTOMIMAGE"]},
+        {"ParameterKey": "ECRREPONAME", "ParameterValue": "mlops-ecrrep"},
+        {"ParameterKey": "IMAGETAG", "ParameterValue": "tree"},
+    ]
+
+
+@pytest.fixture
+def expected_batch_specific_params():
+    return [
+        ("BATCHINPUTBUCKET", "inference"),
+        ("BATCHINFERENCEDATA", os.environ["INFERENCEDATA"]),
+        ("BATCHOUTPUTLOCATION", os.environ["BATCHOUTPUT"]),
+    ]
+
+
+@pytest.fixture
+def expected_batch_params():
+    return [
+        ("ASSETSBUCKET", "testassetsbucket"),
+        ("KMSKEYARN", ""),
+        ("BLUEPRINTBUCKET", "testbucket"),
+        ("MODELNAME", "testmodel"),
+        ("MODELARTIFACTLOCATION", os.environ["MODELARTIFACTLOCATION"]),
+        ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
+        ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
+        ("IMAGEURI", "custom-image-uri"),
+        ("BATCHINPUTBUCKET", "inference"),
+        ("BATCHINFERENCEDATA", os.environ["INFERENCEDATA"]),
+        ("BATCHOUTPUTLOCATION", os.environ["BATCHOUTPUT"]),
+    ]
 
 
 @pytest.fixture
@@ -61,7 +244,7 @@ def required_api_byom_realtime_builtin():
         "model_name",
         "model_artifact_location",
         "inference_instance",
-        "inference_type",
+        "data_capture_location",
         "model_framework",
         "model_framework_version",
     ]
@@ -74,7 +257,7 @@ def required_api_byom_batch_builtin():
         "model_name",
         "model_artifact_location",
         "inference_instance",
-        "inference_type",
+        "batch_job_output_location",
         "model_framework",
         "model_framework_version",
         "batch_inference_data",
@@ -88,8 +271,8 @@ def required_api_byom_realtime_custom():
         "model_name",
         "model_artifact_location",
         "inference_instance",
-        "inference_type",
-        "custom_model_container",
+        "data_capture_location",
+        "custom_image_uri",
     ]
 
 
@@ -97,12 +280,22 @@ def required_api_byom_realtime_custom():
 def required_api_byom_batch_custom():
     return [
         "pipeline_type",
+        "custom_image_uri",
         "model_name",
         "model_artifact_location",
         "inference_instance",
-        "inference_type",
-        "custom_model_container",
         "batch_inference_data",
+        "batch_job_output_location",
+    ]
+
+
+@pytest.fixture
+def required_api_image_builder():
+    return [
+        "pipeline_type",
+        "custom_algorithm_docker",
+        "ecr_repo_name",
+        "image_tag",
     ]
 
 
@@ -110,13 +303,15 @@ def required_api_byom_batch_custom():
 def api_model_monitor_event():
     def _api_model_monitor_event(monitoring_type=""):
         monitor_event = {
-            "pipeline_type": "model_monitor",
+            "pipeline_type": "byom_model_monitor",
+            "model_name": "mymodel2",
             "endpoint_name": "xgb-churn-prediction-endpoint",
-            "training_data": "model_monitor/training-dataset-with-header.csv",
-            "baseline_job_output_location": "baseline_job_output",
-            "monitoring_output_location": "monitoring_output",
-            "schedule_expression": "cron(0 * ? * * *)",
-            "instance_type": "ml.m5.large",
+            "training_data": os.environ["TRAININGDATA"],
+            "baseline_job_output_location": "bucket/baseline_job_output",
+            "data_capture_location": os.environ["DATACAPTURE"],
+            "monitoring_output_location": "bucket/monitoring_output",
+            "schedule_expression": os.environ["SCHEDULEEXP"],
+            "instance_type": os.environ["INSTANCETYPE"],
             "instance_volume_size": "20",
         }
         if monitoring_type.lower() != "" and monitoring_type.lower() in [
@@ -135,12 +330,14 @@ def required_api_keys_model_monitor():
     def _required_api_keys_model_monitor(default=True):
         default_keys = [
             "pipeline_type",
+            "model_name",
             "endpoint_name",
             "baseline_job_output_location",
             "monitoring_output_location",
             "schedule_expression",
             "training_data",
             "instance_type",
+            "data_capture_location",
             "instance_volume_size",
         ]
         if default:
@@ -380,14 +577,19 @@ def get_parameters_keys():
 
 @pytest.fixture
 def cf_client_params(api_byom_event, template_parameters_realtime_builtin):
-    template_parameters = template_parameters_realtime_builtin(api_byom_event("realtime", "xgboost"))
+    template_parameters = template_parameters_realtime_builtin(api_byom_event("byom_realtime_builtin"))
     cf_params = {
         "Capabilities": ["CAPABILITY_IAM"],
         "OnFailure": "DO_NOTHING",
         "Parameters": template_parameters,
         "RoleARN": "arn:aws:role:region:account:action",
-        "StackName": "teststack-testmodel-byompipelinereatimebuiltin",
-        "Tags": [{"Key": "stack_name", "Value": "teststack-testmodel-byompipelinereatimebuiltin"}],
+        "StackName": "teststack-testmodel-BYOMPipelineReatimeBuiltIn",
+        "Tags": [{"Key": "stack_name", "Value": "teststack-testmodel-BYOMPipelineReatimeBuiltIn"}],
         "TemplateURL": "https://testurl/blueprints/byom/byom_realtime_builtin_container.yaml",
     }
     return cf_params
+
+
+@pytest.fixture
+def expcted_update_response(stack_name):
+    return {"StackId": f"Pipeline {stack_name} is already provisioned. No updates are to be performed."}

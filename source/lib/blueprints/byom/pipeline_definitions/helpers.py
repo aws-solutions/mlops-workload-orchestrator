@@ -12,6 +12,8 @@
 # #####################################################################################################################
 from aws_cdk import aws_iam as iam, core
 
+logs_str = ":logs:"
+
 
 def pipeline_permissions(pipeline, assets_bucket):
     """
@@ -32,7 +34,7 @@ def pipeline_permissions(pipeline, assets_bucket):
             resources=[
                 assets_bucket.arn_for_objects("*"),
                 "arn:" + core.Aws.PARTITION + ":lambda:" + core.Aws.REGION + ":" + core.Aws.ACCOUNT_ID + ":function:*",
-                "arn:" + core.Aws.PARTITION + ":logs:" + core.Aws.REGION + ":" + core.Aws.ACCOUNT_ID + ":log-group:*",
+                "arn:" + core.Aws.PARTITION + logs_str + core.Aws.REGION + ":" + core.Aws.ACCOUNT_ID + ":log-group:*",
             ],
         )
     )
@@ -65,14 +67,14 @@ def add_logs_policy(function_role):
             resources=[
                 "arn:"
                 + core.Aws.PARTITION
-                + ":logs:"
+                + logs_str
                 + core.Aws.REGION
                 + ":"
                 + core.Aws.ACCOUNT_ID
                 + ":log-group:/aws/lambda/*",
                 "arn:"
                 + core.Aws.PARTITION
-                + ":logs:"
+                + logs_str
                 + core.Aws.REGION
                 + ":"
                 + core.Aws.ACCOUNT_ID
@@ -83,22 +85,9 @@ def add_logs_policy(function_role):
     function_role.add_to_policy(
         iam.PolicyStatement(
             actions=["logs:CreateLogGroup"],
-            resources=["arn:" + core.Aws.PARTITION + ":logs:" + core.Aws.REGION + ":" + core.Aws.ACCOUNT_ID + ":*"],
+            resources=["arn:" + core.Aws.PARTITION + logs_str + core.Aws.REGION + ":" + core.Aws.ACCOUNT_ID + ":*"],
         )
     )
-
-
-def suppress_cloudwatch_policy():
-    return {
-        "cfn_nag": {
-            "rules_to_suppress": [
-                {
-                    "id": "W58",
-                    "reason": "The lambda functions role already has permissions to write cloudwatch logs",
-                }
-            ]
-        }
-    }
 
 
 def suppress_pipeline_policy():
@@ -216,17 +205,44 @@ def suppress_ecr_policy():
     }
 
 
-# The supression is needed because there is a bug in cfn_nag ECR repository rule W79,
-# where the rule still checks for scanOnPush instead of the new property's name ScanOnPush
-# link to the bug  https://github.com/stelligent/cfn_nag/issues/533
-def suppress_ecr_scan_on_push():
+def suppress_cloudwatch_policy():
     return {
         "cfn_nag": {
             "rules_to_suppress": [
                 {
-                    "id": "W79",
-                    "reason": "scanOnPush is enabled",
+                    "id": "W12",
+                    "reason": "The cloudwatch:PutMetricData can not have a restricted resource.",
                 }
+            ]
+        }
+    }
+
+
+def suppress_cloudformation_action():
+    return {
+        "cfn_nag": {
+            "rules_to_suppress": [
+                {
+                    "id": "F4",
+                    "reason": (
+                        "The cloudformation action is granted PassRole action with * resources to deploy "
+                        "different resources by different MLOps pipelines."
+                    ),
+                },
+                {
+                    "id": "F39",
+                    "reason": (
+                        "The cloudformation action is granted admin permissions to deploy different resources by "
+                        "different MLOps pipelines. Roles are defined by the pipelines' cloudformation templates."
+                    ),
+                },
+                {
+                    "id": "W12",
+                    "reason": (
+                        "This cloudformation action's deployement roel needs * resource to deploy different resources"
+                        " by MLOps pipelines. Specific resources are declared in the roles defined by each pipeline."
+                    ),
+                },
             ]
         }
     }
@@ -243,3 +259,37 @@ def apply_secure_bucket_policy(bucket):
             conditions={"Bool": {"aws:SecureTransport": "false"}},
         )
     )
+
+
+def suppress_lambda_policies():
+    return {
+        "cfn_nag": {
+            "rules_to_suppress": [
+                {
+                    "id": "W89",
+                    "reason": "The lambda function does not need to be attached to a vpc.",
+                },
+                {
+                    "id": "W58",
+                    "reason": "The lambda functions role already has permissions to write cloudwatch logs",
+                },
+                {
+                    "id": "W92",
+                    "reason": "The lambda function does need to define ReservedConcurrentExecutions",
+                },
+            ]
+        }
+    }
+
+
+def suppress_lambda_event_mapping():
+    return {
+        "cfn_nag": {
+            "rules_to_suppress": [
+                {
+                    "id": "W12",
+                    "reason": "IAM permissions, lambda:*EventSourceMapping can not be bound to specific resources.",
+                }
+            ]
+        }
+    }

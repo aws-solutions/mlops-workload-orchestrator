@@ -28,7 +28,7 @@
 set -e
 
 # Important: CDK global version number
-cdk_version=1.83.0
+cdk_version=1.96.0
 
 # Check to see if the required parameters have been provided:
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
@@ -86,6 +86,10 @@ pip install -r ./lambdas/solution_helper/requirements.txt -t ./lambdas/solution_
 echo "pip install -r ./lib/blueprints/byom/lambdas/sagemaker_layer/requirements.txt -t ./lib/blueprints/byom/lambdas/sagemaker_layer/python/"
 pip install -r ./lib/blueprints/byom/lambdas/sagemaker_layer/requirements.txt -t ./lib/blueprints/byom/lambdas/sagemaker_layer/python/
 
+# setup crhelper for invoke lambda custom resource
+echo "pip install -r ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/"
+pip install -r ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/
+
 echo "------------------------------------------------------------------------------"
 echo "[Init] Install dependencies for the cdk-solution-helper"
 echo "------------------------------------------------------------------------------"
@@ -106,32 +110,39 @@ echo "npm install -g aws-cdk@$cdk_version"
 npm install -g aws-cdk@$cdk_version
 
 #Run 'cdk synth for BYOM blueprints
-echo "cdk synth BYOMRealtimeBuiltinStack > lib/blueprints/byom/byom_realtime_builtin_container.yaml"
-cdk synth BYOMRealtimeBuiltinStack > lib/blueprints/byom/byom_realtime_builtin_container.yaml
-echo "cdk synth BYOMRealtimeBuildStack > lib/blueprints/byom/byom_realtime_build_container.yaml"
-cdk synth BYOMRealtimeBuildStack > lib/blueprints/byom/byom_realtime_build_container.yaml
-echo "cdk synth BYOMBatchBuiltinStack > lib/blueprints/byom/byom_batch_builtin_container.yaml"
-cdk synth BYOMBatchBuiltinStack > lib/blueprints/byom/byom_batch_builtin_container.yaml
-echo "cdk synth BYOMBatchBuildStack > lib/blueprints/byom/byom_batch_build_container.yaml"
-cdk synth BYOMBatchBuildStack > lib/blueprints/byom/byom_batch_build_container.yaml
-echo "cdk synth ModelMonitorStack > lib/blueprints/byom/model_monitor.yaml"
-cdk synth ModelMonitorStack > lib/blueprints/byom/model_monitor.yaml
+echo "cdk synth ModelMonitorStack > lib/blueprints/byom/byom_model_monitor.yaml"
+cdk synth ModelMonitorStack > lib/blueprints/byom/byom_model_monitor.yaml
+echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml"
+cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml
+echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml"
+cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml
+echo "cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml"
+cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml
+echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml"
+cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml
+echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml"
+cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml
+
 # Replace %%VERSION%% in other templates
 replace="s/%%VERSION%%/$3/g"
-echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_builtin_container.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_realtime_builtin_container.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_build_container.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_realtime_build_container.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_batch_builtin_container.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_batch_builtin_container.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_batch_build_container.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_batch_build_container.yaml
-echo "sed -i -e $replace lib/blueprints/byom/model_monitor.yaml"
-sed -i -e $replace lib/blueprints/byom/model_monitor.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_model_monitor.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_model_monitor.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml
+echo "sed -i -e $replace lib/blueprints/byom/single_account_codepipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/single_account_codepipeline.yaml
+echo "sed -i -e $replace lib/blueprints/byom/multi_account_codepipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/multi_account_codepipeline.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml
 
-# Run 'cdk synth' for main template to generate raw solution outputs
-echo "cdk synth aws-mlops-framework --output=$staging_dist_dir"
-cdk synth aws-mlops-framework --output=$staging_dist_dir
+# Run 'cdk synth' for main templates to generate raw solution outputs
+echo "cdk synth aws-mlops-single-account-framework --output=$staging_dist_dir"
+cdk synth aws-mlops-single-account-framework --output=$staging_dist_dir
+echo "cdk synth aws-mlops-multi-account-framework --output=$staging_dist_dir"
+cdk synth aws-mlops-multi-account-framework --output=$staging_dist_dir
 
 # Remove unnecessary output files
 echo "cd $staging_dist_dir"
@@ -171,14 +182,20 @@ cd $template_dist_dir
 echo "Updating code source bucket in template with $1"
 replace="s/%%BUCKET_NAME%%/$1/g"
 
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-framework.template
+echo "sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template"
+sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template
+echo "sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template"
+sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template
 replace="s/%%SOLUTION_NAME%%/$2/g"
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-framework.template
+echo "sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework"
+sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template
+echo "sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template"
+sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template
 replace="s/%%VERSION%%/$3/g"
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-framework.template
+echo "sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template"
+sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template
+echo "sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template"
+sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template
 
 
 echo "------------------------------------------------------------------------------"

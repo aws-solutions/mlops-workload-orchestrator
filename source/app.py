@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # #####################################################################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -13,53 +13,80 @@
 # #####################################################################################################################
 from aws_cdk import core
 from lib.aws_mlops_stack import MLOpsStack
-from lib.blueprints.byom.byom_batch_build_container import BYOMBatchBuildStack
-from lib.blueprints.byom.byom_batch_builtin_container import BYOMBatchBuiltinStack
-from lib.blueprints.byom.byom_realtime_build_container import BYOMRealtimeBuildStack
-from lib.blueprints.byom.byom_realtime_builtin_container import BYOMRealtimeBuiltinStack
 from lib.blueprints.byom.model_monitor import ModelMonitorStack
+from lib.blueprints.byom.realtime_inference_pipeline import BYOMRealtimePipelineStack
+from lib.blueprints.byom.byom_batch_pipeline import BYOMBatchStack
+from lib.blueprints.byom.single_account_codepipeline import SingleAccountCodePipelineStack
+from lib.blueprints.byom.multi_account_codepipeline import MultiAccountCodePipelineStack
+from lib.blueprints.byom.byom_custom_algorithm_image_builder import BYOMCustomAlgorithmImageBuilderStack
+from lib.aws_sdk_config_aspect import AwsSDKConfigAspect
 
 solution_id = "SO0136"
 app = core.App()
-MLOpsStack(app, "aws-mlops-framework", description=f"({solution_id}) - AWS MLOps Framework. Version %%VERSION%%")
 
-BYOMBatchBuildStack(
-    app,
-    "BYOMBatchBuildStack",
-    description=(
-        f"({solution_id}byom-bc) - Bring Your Own Model pipeline with Batch Transform and a custom "
-        f"model build in AWS MLOps Framework. Version %%VERSION%%"
-    ),
+mlops_stack_single = MLOpsStack(
+    app, "aws-mlops-single-account-framework", description=f"({solution_id}) - AWS MLOps Framework. Version %%VERSION%%"
 )
-BYOMBatchBuiltinStack(
+
+# add AWS_SDK_USER_AGENT env variable to Lambda functions
+core.Aspects.of(mlops_stack_single).add(AwsSDKConfigAspect(app, "SDKUserAgentSingle", solution_id))
+
+mlops_stack_multi = MLOpsStack(
     app,
-    "BYOMBatchBuiltinStack",
-    description=(
-        f"({solution_id}byom-bb) - Bring Your Own Model pipeline with Batch Transform and a Built-in "
-        f"Sagemaker model in AWS MLOps Framework. Version %%VERSION%%"
-    ),
+    "aws-mlops-multi-account-framework",
+    multi_account=True,
+    description=f"({solution_id}) - AWS MLOps Framework. Version %%VERSION%%",
 )
-BYOMRealtimeBuildStack(
+
+core.Aspects.of(mlops_stack_multi).add(AwsSDKConfigAspect(app, "SDKUserAgentMulti", solution_id))
+
+BYOMCustomAlgorithmImageBuilderStack(
     app,
-    "BYOMRealtimeBuildStack",
+    "BYOMCustomAlgorithmImageBuilderStack",
     description=(
-        f"({solution_id}byom-rc) - Bring Your Own Model pipeline with Realtime inference and a custom "
-        f"model build in AWS MLOps Framework. Version %%VERSION%%"
-    ),
-)
-BYOMRealtimeBuiltinStack(
-    app,
-    "BYOMRealtimeBuiltinStack",
-    description=(
-        f"({solution_id}byom-rb) - Bring Your Own Model pipeline with Realtime inference and a Built-in "
-        f"Sagemaker model in AWS MLOps Framework. Version %%VERSION%%"
+        f"({solution_id}byom-caib) - Bring Your Own Model pipeline to build custom algorithm docker images"
+        f"in AWS MLOps Framework. Version %%VERSION%%"
     ),
 )
 
-ModelMonitorStack(
+batch_stack = BYOMBatchStack(
+    app,
+    "BYOMBatchStack",
+    description=(
+        f"({solution_id}byom-bt) - BYOM Batch Transform pipeline" f"in AWS MLOps Framework. Version %%VERSION%%"
+    ),
+)
+
+core.Aspects.of(batch_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentBatch", solution_id))
+
+model_monitor_stack = ModelMonitorStack(
     app,
     "ModelMonitorStack",
     description=(f"({solution_id}byom-mm) - Model Monitor pipeline. Version %%VERSION%%"),
 )
+
+core.Aspects.of(model_monitor_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentMonitor", solution_id))
+
+
+realtime_stack = BYOMRealtimePipelineStack(
+    app,
+    "BYOMRealtimePipelineStack",
+    description=(f"({solution_id}byom-rip) - BYOM Realtime Inference Pipleline. Version %%VERSION%%"),
+)
+
+core.Aspects.of(realtime_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentRealtime", solution_id))
+
+SingleAccountCodePipelineStack(
+    app,
+    "SingleAccountCodePipelineStack",
+    description=(f"({solution_id}byom-sac) - Single-account codepipeline. Version %%VERSION%%"),
+)
+
+MultiAccountCodePipelineStack(
+    app,
+    "MultiAccountCodePipelineStack",
+    description=(f"({solution_id}byom-mac) - Multi-account codepipeline. Version %%VERSION%%"),
+)
+
 
 app.synth()

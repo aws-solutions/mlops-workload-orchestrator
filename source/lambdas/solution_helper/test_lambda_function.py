@@ -13,6 +13,8 @@
 
 import unittest, requests
 from unittest import mock
+import pytest
+from lambda_function import handler
 
 
 def mocked_requests_post(*args, **kwargs):
@@ -70,6 +72,16 @@ class LambdaTest(unittest.TestCase):
             {"Foo": "Bar", "RequestType": "Create", "gitSelected": "Test", "bucketSelected": "test-bucket"},
         )
 
+        # no values provided
+        event["ResourceProperties"].update({"gitSelected": ""})
+        event["ResourceProperties"].update({"bucketSelected": ""})
+        custom_resource(event, None)
+        actual_payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(
+            actual_payload["Data"],
+            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "", "bucketSelected": ""},
+        )
+
     @mock.patch("requests.post")
     def test_send_metrics_connection_error(self, mock_post):
         mock_post.side_effect = requests.exceptions.ConnectionError()
@@ -116,3 +128,8 @@ class LambdaTest(unittest.TestCase):
 
         actual_response = _sanitize_data(resource_properties)
         self.assertCountEqual(expected_response, actual_response)
+
+    @mock.patch("lambda_function.helper")
+    def test_helper(self, mocked_helper):
+        handler({}, {})
+        mocked_helper.assert_called()

@@ -119,11 +119,11 @@ run_framework_lambda_test() {
 	for folder in */ ; do
 		cd "$folder"
 		function_name=${PWD##*/}
-		if [ "$folder" != "custom_resource/" ]; then
-			pip install -r requirements-test.txt
-			run_python_test $(basename $folder)
-			rm -rf *.egg-info
-		fi
+
+		pip install -r requirements-test.txt
+		run_python_test $(basename $folder)
+		rm -rf *.egg-info
+
 		cd ..
 	done
 }

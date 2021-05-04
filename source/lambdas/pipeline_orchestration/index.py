@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -11,18 +11,29 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 import json
-import uuid
 from json import JSONEncoder
 import os
 import datetime
-import boto3
 from shared.wrappers import BadRequest, api_exception_handler
 from shared.logger import get_logger
+from shared.helper import get_client
+from lambda_helpers import (
+    validate,
+    template_url,
+    get_stack_name,
+    get_codepipeline_params,
+    get_image_builder_params,
+    format_template_parameters,
+    create_template_zip_file,
+)
 
-cloudformation_client = boto3.client("cloudformation")
-codepipeline_client = boto3.client("codepipeline")
+cloudformation_client = get_client("cloudformation")
+codepipeline_client = get_client("codepipeline")
+s3_client = get_client("s3")
 
 logger = get_logger(__name__)
+
+content_type = "plain/text"
 
 
 # subclass JSONEncoder to be able to convert pipeline status to json
@@ -51,7 +62,7 @@ def handler(event, context):
         )
 
 
-def provision_pipeline(event, client=cloudformation_client):
+def provision_pipeline(event, client=cloudformation_client, s3_client=s3_client):
     """
     provision_pipeline takes the lambda event object and creates a cloudformation stack
 
@@ -66,26 +77,58 @@ def provision_pipeline(event, client=cloudformation_client):
     # validate required attributes based on the pipeline's type
     validated_event = validate(event)
     # extract byom attributes
-    pipeline_type = validated_event.get("pipeline_type", "")
-    custom_container = validated_event.get("custom_model_container", "")
-    inference_type = validated_event.get("inference_type", "")
-    pipeline_template_url = template_url(inference_type, custom_container, pipeline_type)
-    # construct common temaplate paramaters
-    provisioned_pipeline_stack_name, template_parameters = get_template_parameters(validated_event)
-    # create a pipeline stack using user parameters and specified blueprint
-    stack_response = client.create_stack(
-        StackName=provisioned_pipeline_stack_name,
-        TemplateURL=pipeline_template_url,
-        Parameters=template_parameters,
-        Capabilities=["CAPABILITY_IAM"],
-        OnFailure="DO_NOTHING",
-        RoleARN=os.environ["CFN_ROLE_ARN"],
-        Tags=[
-            {"Key": "stack_name", "Value": provisioned_pipeline_stack_name},
-        ],
-    )
+    pipeline_type = validated_event.get("pipeline_type", "").strip().lower()
+    is_multi_account = os.environ["IS_MULTI_ACCOUNT"]
+    provisioned_pipeline_template_url = template_url(pipeline_type)
+
+    # construct stack name to provision
+    provisioned_pipeline_stack_name = get_stack_name(validated_event)
+
+    # if the pipeline to provision is byom_image_builder
+    if pipeline_type == "byom_image_builder":
+        image_builder_params = get_image_builder_params(validated_event)
+        # format the params (the format is the same for multi-accouunt parameters)
+        formatted_image_builder_params = format_template_parameters(image_builder_params, "True")
+        # create the codepipeline
+        stack_response = create_codepipeline_stack(
+            provisioned_pipeline_stack_name, template_url("byom_image_builder"), formatted_image_builder_params, client
+        )
+
+    else:
+        # create a pipeline stack using user parameters and specified blueprint
+        codepipeline_stack_name = f"{provisioned_pipeline_stack_name}-codepipeline"
+        pipeline_template_url = (
+            template_url("multi_account_codepipeline")
+            if is_multi_account == "True"
+            else template_url("single_account_codepipeline")
+        )
+
+        template_zip_name = f"mlops_provisioned_pipelines/{provisioned_pipeline_stack_name}/template.zip"
+        template_file_name = provisioned_pipeline_template_url.split("/")[-1]
+        # get the codepipeline parameters
+        codepipeline_params = get_codepipeline_params(
+            is_multi_account, provisioned_pipeline_stack_name, template_zip_name, template_file_name
+        )
+        # format the params (the format is the same for multi-accouunt parameters)
+        formatted_codepipeline_params = format_template_parameters(codepipeline_params, "True")
+        # create the codepipeline
+        stack_response = create_codepipeline_stack(
+            codepipeline_stack_name, pipeline_template_url, formatted_codepipeline_params, client
+        )
+
+        # upload template.zip (contains pipeline template and parameters files)
+        create_template_zip_file(
+            validated_event,
+            os.environ["BLUEPRINT_BUCKET"],
+            os.environ["ASSETS_BUCKET"],
+            provisioned_pipeline_template_url,
+            template_zip_name,
+            is_multi_account,
+            s3_client,
+        )
+
     logger.info("New pipelin stack created")
-    logger.debug(stack_response)
+    logger.info(stack_response)
     response = {
         "statusCode": 200,
         "isBase64Encoded": False,
@@ -95,9 +138,70 @@ def provision_pipeline(event, client=cloudformation_client):
                 "pipeline_id": stack_response["StackId"],
             }
         ),
-        "headers": {"Content-Type": "plain/text"},
+        "headers": {"Content-Type": content_type},
     }
     return response
+
+
+def update_stack(codepipeline_stack_name, pipeline_template_url, template_parameters, client):
+    try:
+        update_response = client.update_stack(
+            StackName=codepipeline_stack_name,
+            TemplateURL=pipeline_template_url,
+            Parameters=template_parameters,
+            Capabilities=["CAPABILITY_IAM"],
+            RoleARN=os.environ["CFN_ROLE_ARN"],
+            Tags=[
+                {"Key": "stack_name", "Value": codepipeline_stack_name},
+            ],
+        )
+
+        logger.info(update_response)
+
+        return {"StackId": f"Pipeline {codepipeline_stack_name} is being updated."}
+
+    except Exception as e:
+        logger.info(f"Error during stack update {codepipeline_stack_name}: {str(e)}")
+        if "No updates are to be performed" in str(e):
+            return {
+                "StackId": f"Pipeline {codepipeline_stack_name} is already provisioned. No updates are to be performed."
+            }
+        else:
+            raise e
+
+
+def create_codepipeline_stack(
+    codepipeline_stack_name, pipeline_template_url, template_parameters, client=cloudformation_client
+):
+    try:
+        stack_response = client.create_stack(
+            StackName=codepipeline_stack_name,
+            TemplateURL=pipeline_template_url,
+            Parameters=template_parameters,
+            Capabilities=["CAPABILITY_IAM"],
+            OnFailure="DO_NOTHING",
+            RoleARN=os.environ["CFN_ROLE_ARN"],
+            Tags=[
+                {"Key": "stack_name", "Value": codepipeline_stack_name},
+            ],
+        )
+
+        logger.info(stack_response)
+        return stack_response
+
+    except Exception as e:
+        logger.error(f"Error in create_update_cf_stackset lambda functions: {str(e)}")
+        if "already exists" in str(e):
+            logger.info(f"AWS Codepipeline {codepipeline_stack_name} already exists. Skipping codepipeline create")
+            # if the pipeline to update is BYOMPipelineImageBuilder
+            if codepipeline_stack_name.endswith("byompipelineimagebuilder"):
+                return update_stack(codepipeline_stack_name, pipeline_template_url, template_parameters, client)
+
+            return {
+                "StackId": f"Pipeline {codepipeline_stack_name} is already provisioned. Updating template parameters."
+            }
+        else:
+            raise e
 
 
 def pipeline_status(event, cfn_client=cloudformation_client, cp_client=codepipeline_client):
@@ -126,7 +230,7 @@ def pipeline_status(event, cfn_client=cloudformation_client, cp_client=codepipel
             "statusCode": 200,
             "isBase64Encoded": False,
             "body": "pipeline cloudformation stack has not provisioned the pipeline yet.",
-            "headers": {"Content-Type": "plain/text"},
+            "headers": {"Content-Type": content_type},
         }
     else:
         # object from codepipeline
@@ -136,362 +240,5 @@ def pipeline_status(event, cfn_client=cloudformation_client, cp_client=codepipel
             "statusCode": 200,
             "isBase64Encoded": False,
             "body": json.dumps(pipeline_status, indent=4, cls=DateTimeEncoder),
-            "headers": {"Content-Type": "plain/text"},
+            "headers": {"Content-Type": content_type},
         }
-
-
-def template_url(inference_type, custom_container, pipeline_type):
-    """
-    template_url is a helper function that determines the cloudformation stack's file name based on
-    inputs
-
-    :inference_type: type of inference from lambda event input. Possible values: 'batch' or 'realtime'
-    :custom_container: whether a custom container build is needed in the pipeline or no.
-    Possible values: 'True' or 'False'
-
-    :return: returns a link to the appropriate coudformation template files which can be one of these values:
-    byom_realtime_build_container.yaml
-    byom_realtime_builtin_container.yaml
-    byom_batch_build_container.yaml
-    byom_batch_builtin_container.yaml
-    """
-    if pipeline_type == "model_monitor":
-        url = "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom/model_monitor.yaml"
-        return url
-    else:
-        url = "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/" + pipeline_type + "/" + pipeline_type
-        if inference_type.lower() == "realtime":
-            url = url + "_realtime"
-        elif inference_type.lower() == "batch":
-            url = url + "_batch"
-        else:
-            raise BadRequest("Bad request format. Inference type must be 'realtime' or 'batch'")
-
-        if len(custom_container) > 0 and custom_container.endswith(".zip"):
-            url = url + "_build_container.yaml"
-        elif len(custom_container) == 0:
-            url = url + "_builtin_container.yaml"
-        else:
-            raise BadRequest(
-                "Bad request. Custom container should point to a path to .zip file containing custom model assets."
-            )
-        return url
-
-
-def get_template_parameters(event):
-    pipeline_type = event.get("pipeline_type", "")
-    model_framework = event.get("model_framework", "")
-    model_framework_version = event.get("model_framework_version", "")
-    model_name = event.get("model_name", "").lower().strip()
-    model_artifact_location = event.get("model_artifact_location", "")
-    inference_instance = event.get("inference_instance", "")
-    custom_container = event.get("custom_model_container", "")
-    batch_inference_data = event.get("batch_inference_data", "")
-    pipeline_stack_name = os.environ["PIPELINE_STACK_NAME"]
-    endpoint_name = event.get("endpoint_name", "")
-    template_parameters = [
-        {
-            "ParameterKey": "NOTIFICATIONEMAIL",
-            "ParameterValue": os.environ["NOTIFICATION_EMAIL"],
-            "UsePreviousValue": True,
-        },
-        {
-            "ParameterKey": "BLUEPRINTBUCKET",
-            "ParameterValue": os.environ["BLUEPRINT_BUCKET"],
-            "UsePreviousValue": True,
-        },
-        {
-            "ParameterKey": "ASSETSBUCKET",
-            "ParameterValue": os.environ["ASSETS_BUCKET"],
-            "UsePreviousValue": True,
-        },
-    ]
-    if pipeline_type == "byom":
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}"
-        # construct common parameters across byom builtin/custom and realtime/batch
-        template_parameters.extend(
-            [
-                {
-                    "ParameterKey": "MODELNAME",
-                    "ParameterValue": model_name,
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "MODELARTIFACTLOCATION",
-                    "ParameterValue": model_artifact_location,
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "INFERENCEINSTANCE",
-                    "ParameterValue": inference_instance,
-                    "UsePreviousValue": True,
-                },
-            ]
-        )
-        if (
-            event.get("inference_type", "").lower().strip() == "realtime"
-            and event.get("model_framework", "").strip() != ""
-        ):
-            # update stack name
-            provisioned_pipeline_stack_name = f"{provisioned_pipeline_stack_name}-BYOMPipelineReatimeBuiltIn"
-            # add builtin/realtime parameters
-            template_parameters.extend(
-                [
-                    {
-                        "ParameterKey": "MODELFRAMEWORK",
-                        "ParameterValue": model_framework,
-                        "UsePreviousValue": True,
-                    },
-                    {
-                        "ParameterKey": "MODELFRAMEWORKVERSION",
-                        "ParameterValue": model_framework_version,
-                        "UsePreviousValue": True,
-                    },
-                ]
-            )
-        elif (
-            event.get("inference_type", "").lower().strip() == "batch"
-            and event.get("model_framework", "").strip() != ""
-        ):
-            # update stack name
-            provisioned_pipeline_stack_name = f"{provisioned_pipeline_stack_name}-BYOMPipelineBatchBuiltIn"
-            # add builtin/batch parameters
-            template_parameters.extend(
-                [
-                    {
-                        "ParameterKey": "MODELFRAMEWORK",
-                        "ParameterValue": model_framework,
-                        "UsePreviousValue": True,
-                    },
-                    {
-                        "ParameterKey": "MODELFRAMEWORKVERSION",
-                        "ParameterValue": model_framework_version,
-                        "UsePreviousValue": True,
-                    },
-                    {
-                        "ParameterKey": "BATCHINFERENCEDATA",
-                        "ParameterValue": batch_inference_data,
-                        "UsePreviousValue": True,
-                    },
-                ]
-            )
-        elif (
-            event.get("inference_type", "").lower().strip() == "realtime"
-            and event.get("model_framework", "").strip() == ""
-        ):
-            # update stack name
-            provisioned_pipeline_stack_name = f"{provisioned_pipeline_stack_name}-BYOMPipelineRealtimeBuild"
-            # add custom/realtime parameters
-            template_parameters.extend(
-                [
-                    {
-                        "ParameterKey": "CUSTOMCONTAINER",
-                        "ParameterValue": custom_container,
-                        "UsePreviousValue": True,
-                    },
-                ]
-            )
-        elif (
-            event.get("inference_type", "").lower().strip() == "batch"
-            and event.get("model_framework", "").strip() == ""
-        ):
-            # update stack name
-            provisioned_pipeline_stack_name = f"{provisioned_pipeline_stack_name}-BYOMPipelineBatchBuild"
-            # add custom/batch parameters
-            template_parameters.extend(
-                [
-                    {
-                        "ParameterKey": "CUSTOMCONTAINER",
-                        "ParameterValue": custom_container,
-                        "UsePreviousValue": True,
-                    },
-                    {
-                        "ParameterKey": "BATCHINFERENCEDATA",
-                        "ParameterValue": batch_inference_data,
-                        "UsePreviousValue": True,
-                    },
-                ]
-            )
-        else:
-            raise BadRequest(
-                "Bad request format. Pipeline type not supported. Check documentation for API & config formats."
-            )
-
-    elif pipeline_type == "model_monitor":
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{endpoint_name}-model-monitor"
-        # get the optional monitoring type
-        monitoring_type = event.get("monitoring_type", "dataquality").lower().strip()
-        # create uniques names for data baseline and monitoring schedule. The names need to be unique because
-        # Old jobs are not deleted, and there is a high possibility that the client create a job with the same name
-        # which will throw an error.
-        baseline_job_name = f"{endpoint_name}-baseline-job-{str(uuid.uuid4())[:8]}"
-        monitoring_schedule_name = f"{endpoint_name}-monitor-{monitoring_type}-{str(uuid.uuid4())[:8]}"
-        # add model monitor parameters
-        template_parameters.extend(
-            [
-                {
-                    "ParameterKey": "BASELINEJOBOUTPUTLOCATION",
-                    "ParameterValue": event.get("baseline_job_output_location"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "ENDPOINTNAME",
-                    "ParameterValue": endpoint_name,
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "BASELINEJOBNAME",
-                    "ParameterValue": baseline_job_name,
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "MONITORINGSCHEDULENAME",
-                    "ParameterValue": monitoring_schedule_name,
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "MONITORINGOUTPUTLOCATION",
-                    "ParameterValue": event.get("monitoring_output_location"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "SCHEDULEEXPRESSION",
-                    "ParameterValue": event.get("schedule_expression"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "TRAININGDATA",
-                    "ParameterValue": event.get("training_data"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "INSTANCETYPE",
-                    "ParameterValue": event.get("instance_type"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "INSTANCEVOLUMESIZE",
-                    "ParameterValue": event.get("instance_volume_size"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "MONITORINGTYPE",
-                    "ParameterValue": event.get("monitoring_type", "dataquality"),
-                    "UsePreviousValue": True,
-                },
-                {
-                    "ParameterKey": "MAXRUNTIMESIZE",
-                    "ParameterValue": event.get("max_runtime_seconds", "-1"),
-                    "UsePreviousValue": True,
-                },
-            ]
-        )
-    else:
-        raise BadRequest(
-            "Bad request format. Pipeline type not supported. Check documentation for API & config formats."
-        )
-
-    return (provisioned_pipeline_stack_name.lower(), template_parameters)
-
-
-def get_required_keys(event):
-    required_keys = []
-    if event.get("pipeline_type", "").lower() == "byom":
-        # common keys
-        common_keys = [
-            "pipeline_type",
-            "model_name",
-            "model_artifact_location",
-            "inference_instance",
-            "inference_type",
-        ]
-
-        if (
-            event.get("inference_type", "").lower().strip() == "realtime"
-            and event.get("model_framework", "").strip() != ""
-        ):
-            required_keys = common_keys + [
-                "model_framework",
-                "model_framework_version",
-            ]
-        elif (
-            event.get("inference_type", "").lower().strip() == "batch"
-            and event.get("model_framework", "").strip() != ""
-        ):
-            required_keys = common_keys + [
-                "model_framework",
-                "model_framework_version",
-                "batch_inference_data",
-            ]
-        elif (
-            event.get("inference_type", "").lower().strip() == "realtime"
-            and event.get("model_framework", "").strip() == ""
-        ):
-            required_keys = common_keys + [
-                "custom_model_container",
-            ]
-        elif (
-            event.get("inference_type", "").lower().strip() == "batch"
-            and event.get("model_framework", "").strip() == ""
-        ):
-            required_keys = common_keys + [
-                "custom_model_container",
-                "batch_inference_data",
-            ]
-        else:
-            raise BadRequest("Bad request. missing keys for byom")
-    elif event.get("pipeline_type", "").lower().strip() == "model_monitor":
-        required_keys = [
-            "pipeline_type",
-            "endpoint_name",
-            "baseline_job_output_location",
-            "monitoring_output_location",
-            "schedule_expression",
-            "training_data",
-            "instance_type",
-            "instance_volume_size",
-        ]
-
-        if event.get("monitoring_type", "").lower().strip() in ["modelquality", "modelbias", "modelexplainability"]:
-            required_keys = required_keys + [
-                "features_attribute",
-                "inference_attribute",
-                "probability_attribute",
-                "probability_threshold_attribute",
-            ]
-        # monitoring_type is optional, but if the client provided a value not in the allowed values, raise an exception
-        elif event.get("monitoring_type", "").lower().strip() not in [
-            "",
-            "dataquality",
-            "modelquality",
-            "modelbias",
-            "modelexplainability",
-        ]:
-            raise BadRequest(
-                "Bad request. MonitoringType supported are 'DataQuality'|'ModelQuality'|'ModelBias'|'ModelExplainability'"
-            )
-    else:
-        raise BadRequest(
-            "Bad request format. Pipeline type not supported. Check documentation for API & config formats"
-        )
-
-    return required_keys
-
-
-def validate(event):
-    """
-    validate is a helper function that checks if all required input parameters are present in the handler's event object
-
-    :event: Lambda function's event object
-
-    :return: returns the event back if it passes the validation othewise it raises a bad request exception
-    :raises: BadRequest Exception
-    """
-    # get the required keys to validate the event
-    required_keys = get_required_keys(event)
-    for key in required_keys:
-        if key not in event:
-            logger.error(f"Request event did not have parameter: {key}")
-            raise BadRequest(f"Bad request. API body does not have the necessary parameter: {key}")
-
-    return event

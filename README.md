@@ -2,38 +2,48 @@
 
 The machine learning (ML) lifecycle is an iterative and repetitive process that involves
 changing models over time and learning from new data. As ML applications gain popularity,
-organizations are building new and better applications for a wide range of use cases
-including optimized email campaigns, forecasting tools, recommendation engines, self-driving
-vehicles, virtual personal assistants, and more. While operational and pipelining
-processes vary greatly across projects and organizations, the processes contain
-commonalities across use cases.
+organizations are building new and better applications for a wide range of use cases including
+optimized email campaigns, forecasting tools, recommendation engines, self-driving vehicles,
+virtual personal assistants, and more. While operational and pipelining processes vary greatly
+across projects and organizations, the processes contain commonalities across use cases.
 
-The AWS MLOps Framework solution helps you streamline and enforce architecture best
-practices for machine learning (ML) model productionization. This solution is an extendable
-framework that provides a standard interface for managing ML pipelines for AWS ML
-services and third-party services. The solution’s template allows customers to upload their
-trained models, configure the orchestration of the pipeline, trigger the start of the deployment
-process, move models through different stages of deployment, and monitor the successes
-and failures of the operations.
+The solution helps you streamline and enforce architecture best practices by providing an extendable
+framework for managing ML pipelines for Amazon Machine Learning (Amazon ML) services and third-party
+services. The solution’s template allows you to upload trained models, configure the orchestration of
+the pipeline, initiate the start of the deployment process, move models through different stages of
+deployment, and monitor the successes and failures of the operations. The solution also provides a
+pipeline for building and registering Docker images for custom algorithms that can be used for model
+deployment on an [Amazon SageMaker](https://aws.amazon.com/sagemaker/) endpoint.
 
-You can use batch and real-time data inferences to configure the pipeline for your business
-context. You can also provision multiple model monitor pipelines to periodically monitor the quality of deployed Amazon SageMaker's ML models. This solution increases your team’s agility and efficiency by allowing them to
-repeat successful processes at scale.
+You can use batch and real-time data inferences to configure the pipeline for your business context.
+You can also provision multiple Model Monitor pipelines to periodically monitor the quality of deployed
+Amazon SageMaker ML models. This solution increases your team’s agility and efficiency by allowing them
+to repeat successful processes at scale.
+
+#### Benefits
+
+- **Leverage a pre-configured machine learning pipeline:** Use the solution's reference architecture to initiate a pre-configured pipeline through an API call or a Git repository.
+- **Automatically deploy a trained model and inference endpoint:** Use the solution's framework to automate the model monitor pipeline or the Amazon SageMaker BYOM pipeline. Deliver an inference endpoint with model drift detection packaged as a serverless microservice.
 
 ---
 
 ## Architecture
 
-The AWS CloudFormation template deploys a Pipeline Provisioning framework that
-provisions a machine learning pipeline (Bring Your Own Model for SageMaker). The
-template includes the AWS Lambda functions and AWS Identity and Access Management
-(IAM) roles necessary to set up your account, and it creates an Amazon Simple Storage
-Service (Amazon S3) bucket that contains the CloudFormation templates that set up the
-pipelines.The template also creates an Amazon API Gateway instance, an additional
-Lambda function, and an AWS CodePipeline instance.
-The provisioned pipeline includes four stages: source, build, deploy, and share.
+This solution is built with two primary components: 1) the orchestrator component, created by deploying the solution’s AWS CloudFormation template, and 2) the AWS CodePipeline instance deployed from either calling the solution’s API Gateway, or by committing a configuration file into an AWS CodeCommit repository. The solution’s pipelines are implemented as AWS CloudFormation templates, which allows you to extend the solution and add custom pipelines.
 
-![architecture](source/architecture.png)
+To support multiple use cases and business needs, the solution provides two AWS CloudFormation templates: **option 1** for single account deployment, and **option 2** for multi-account deployment.
+
+### Template option 1: Single account deployment
+
+The solution’s single account architecture allows you to provision ML pipelines in a single AWS account.
+
+![architecture-option-1](source/architecture-option-1.png)
+
+### Template option 2: Multi-account deployment
+
+The solution uses [AWS Organizations](https://aws.amazon.com/organizations/) and [AWS CloudFormation StackSets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/what-is-cfnstacksets.html) to allow you to provision or update ML pipelines across AWS accounts. Using an administrator account (also referred to as the orchestrator account) allows you to deploy ML pipelines implemented as AWS CloudFormation templates into selected target accounts (for example, development, staging, and production accounts).
+
+![architecture-option-2](source/architecture-option-2.png)
 
 ---
 
@@ -117,7 +127,7 @@ aws s3 cp ./dist/ s3://my-bucket-name-<aws_region>/$SOLUTION_NAME/$VERSION/ --re
 
 ## Known Issues
 
-### Pipeline may fail in custom model container build due to Docker Hub rate limits
+### Image Builder Pipeline may fail due to Docker Hub rate limits
 
 When building custom model container that pulls public docker images from Docker Hub in short time period, you may occasionally face throttling errors with an error message such as:
 ` toomanyrequests You have reached your pull rate limit. You may increase the limit by authenticating and upgrading: https://www.docker.com/increase-rate-limit`
@@ -125,6 +135,16 @@ When building custom model container that pulls public docker images from Docker
 This is due to Docker Inc. [limiting the rate at which images are pulled under Docker Hub anonymous and free plans](https://docs.docker.com/docker-hub/download-rate-limit/). Under the new limits of Dockerhub, free plan anonymous use is limited to 100 pulls per six hours, free plan authenticated accounts limited to 200 pulls per six hours, and Pro and Team accounts do not see any rate limits.
 
 For more information regarding this issue and short-term and long-term fixes, refer to this AWS blog post: [Advice for customers dealing with Docker Hub rate limits, and a Coming Soon announcement](https://aws.amazon.com/blogs/containers/advice-for-customers-dealing-with-docker-hub-rate-limits-and-a-coming-soon-announcement/)
+
+### Model Monitor Blueprint may fail in multi-account deployment option
+
+When using the blueprint for Model Monitor pipeline in multi-account deployment option, the deployment of the stack in the staging ("DeployStaging") account may fail with an error message:
+
+```
+Resource handler returned message: "Error occurred during operation 'CREATE'." (RequestToken:<token-id>, HandlerErrorCode: GeneralServiceException)
+```
+
+Workaround: there is no known workaround for this issue for the multi-account Model Monitor blueprint.
 
 ---
 

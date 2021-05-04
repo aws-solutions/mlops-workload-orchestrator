@@ -25,26 +25,6 @@ class BadRequest(Exception):
     pass
 
 
-def code_pipeline_exception_handler(f):
-    @wraps(f)
-    def wrapper(event, context):
-        try:
-            return f(event, context)
-        except Exception as e:
-            codepipeline = get_client("codepipeline")
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
-            codepipeline.put_job_failure_result(
-                jobId=event["CodePipeline.job"]["id"],
-                failureDetails={
-                    "message": f"Job failed. {str(e)}. Check the logs for more info.",
-                    "type": "JobFailed",
-                },
-            )
-
-    return wrapper
-
-
 def api_exception_handler(f):
     @wraps(f)
     def wrapper(event, context):

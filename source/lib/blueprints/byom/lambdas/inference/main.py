@@ -15,21 +15,22 @@ import json
 import boto3
 from shared.wrappers import api_exception_handler
 from shared.logger import get_logger
+from shared.helper import get_client
 
 logger = get_logger(__name__)
-sagemaker_client = boto3.client("sagemaker-runtime")
+sagemaker_client = get_client("sagemaker-runtime")
 
 
 @api_exception_handler
 def handler(event, context):
     event_body = json.loads(event["body"])
-    endpoint_name = os.environ["ENDPOINT_NAME"]
+    endpoint_name = os.environ["SAGEMAKER_ENDPOINT_NAME"]
     return invoke(event_body, endpoint_name)
 
 
 def invoke(event_body, endpoint_name, sm_client=sagemaker_client):
     response = sm_client.invoke_endpoint(
-        EndpointName=endpoint_name, Body=event_body["payload"], ContentType=event_body["ContentType"]
+        EndpointName=endpoint_name, Body=event_body["payload"], ContentType=event_body["content_type"]
     )
     logger.info(response)
     predictions = response["Body"].read().decode()

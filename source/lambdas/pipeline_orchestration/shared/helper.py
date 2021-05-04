@@ -11,18 +11,27 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 import boto3
+import json
+import os
+from botocore.config import Config
 from shared.logger import get_logger
-
 
 logger = get_logger(__name__)
 _helpers_service_clients = dict()
 
 
-def get_client(service_name):
+# Set Boto3 configuration to track the solution's usage
+CLIENT_CONFIG = Config(
+    retries={"max_attempts": 3, "mode": "standard"},
+    **json.loads(os.environ.get("AWS_SDK_USER_AGENT", '{"user_agent_extra": null}')),
+)
+
+
+def get_client(service_name, config=CLIENT_CONFIG):
     global _helpers_service_clients
     if service_name not in _helpers_service_clients:
         logger.debug(f"Initializing global boto3 client for {service_name}")
-        _helpers_service_clients[service_name] = boto3.client(service_name)
+        _helpers_service_clients[service_name] = boto3.client(service_name, config=config)
     return _helpers_service_clients[service_name]
 
 
@@ -35,8 +44,6 @@ def reset_client():
 # For the latest images per region, see https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-pre-built-container.html
 # These are SageMaker service account numbers for the built-in SageMaker containers.
 def get_built_in_model_monitor_container_uri(region):
-    container_uri_format = "{0}.dkr.ecr.{1}.amazonaws.com/sagemaker-model-monitor-analyzer"
-
     regions_to_accounts = {
         "us-east-1": "156813124566",
         "us-east-2": "777275614652",
@@ -63,5 +70,8 @@ def get_built_in_model_monitor_container_uri(region):
         "us-gov-west-1": "362178532790",
     }
 
-    container_uri = container_uri_format.format(regions_to_accounts[region], region)
+    container_uri = (
+        f"{regions_to_accounts[region]}.dkr.ecr.{region}.amazonaws.com/sagemaker-model-monitor-analyzer:latest"
+    )
+
     return container_uri

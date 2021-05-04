@@ -22,26 +22,35 @@ import boto3
 from shared.logger import get_logger
 from main import handler, invoke
 
-mock_env_variables = {
-    "ENDPOINT_URI": "test/test",
-}
+mock_env_variables = {"ENDPOINT_URI": "test/test", "SAGEMAKER_ENDPOINT_NAME": "test-endpoint"}
+
+
+@pytest.fixture
+def event():
+    return {"body": '{"payload": "test", "content_type": "text/csv"}'}
+
+
+@pytest.fixture
+def expected_response():
+    return {
+        "statusCode": 200,
+        "isBase64Encoded": False,
+        "body": [1, 0, 1, 0],
+        "headers": {"Content-Type": "plain/text"},
+    }
 
 
 @patch.dict(os.environ, mock_env_variables)
-def test_invoke():
+def test_invoke(event):
+    with patch("boto3.client") as mock_client:
+        invoke(json.loads(event["body"]), "test", sm_client=mock_client)
+        mock_client.invoke_endpoint.assert_called_with(EndpointName="test", Body="test", ContentType="text/csv")
 
-    sm_invoke_endpoint_expected_params = {
-        "EndpointName": "test",
-        "Body": "test",
-        "ContentType": "text/csv",
-    }
 
-    event_body = {"payload": "test", "ContentType": "text/csv"}
-
-    with patch('boto3.client') as mock_client:
-        invoke(event_body, "test", sm_client=mock_client)
-        mock_client.invoke_endpoint.assert_called_with(
-            EndpointName="test",
-            Body="test",
-            ContentType="text/csv"
-        )
+@patch("main.invoke")
+@patch("boto3.client")
+@patch.dict(os.environ, mock_env_variables)
+def test_handler(mocked_client, mocked_invoke, event, expected_response):
+    mocked_invoke.return_value = expected_response
+    response = handler(event, {})
+    assert response == expected_response
