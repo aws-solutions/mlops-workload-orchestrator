@@ -77,9 +77,9 @@ Upon successfully cloning the repository into your local development environment
 * Note: Not all languages are supported at this time. Actual appearance may vary depending on release.
 ```
 
-## Building the solution
+## Creating a custom build
 
-### 1. Get source code
+### 1. Clone the repository
 
 Clone this git repository.
 
@@ -87,43 +87,48 @@ Clone this git repository.
 
 ---
 
-### 2. Running Unit Tests
+### 2. Build the solution for deployment
 
-The `/source/run-all-tests.sh` script is the centralized script for running all unit, integration, and snapshot tests for both the CDK project as well as any associated Lambda functions or other source code packages.
+- To run the unit tests
 
-- Note: It is the developer's responsibility to ensure that all test commands are called in this script, and that it is kept up to date.
-
-This script is called from the solution build scripts to ensure that specified tests are passing while performing build, validation and publishing tasks via the pipeline.
-
----
-
-### 3. Building Project Distributable
+```
+cd <rootDir>/source
+chmod +x ./run-all-tests.sh
+./run-all-tests.sh
+```
 
 - Configure the bucket name of your target Amazon S3 distribution bucket
 
 ```
-export DIST_OUTPUT_BUCKET=my-bucket-name # bucket where customized code will reside
+export DIST_OUTPUT_BUCKET=my-bucket-name
 export SOLUTION_NAME=my-solution-name
-export VERSION=my-version # version number for the customized code
+export VERSION=my-version
 ```
-
-_Note:_ You would have to create an S3 bucket with the prefix 'my-bucket-name-<aws_region>'; aws_region is where you are testing the customized solution. Also, the assets in bucket should be publicly accessible.
 
 - Now build the distributable:
 
 ```
-cd deployment && chmod +x ./build-s3-dist.sh \n
-./build-s3-dist.sh $DIST_OUTPUT_BUCKET $SOLUTION_NAME $VERSION \n
+cd <rootDir>/deployment
+chmod +x ./build-s3-dist.sh
+./build-s3-dist.sh $DIST_OUTPUT_BUCKET $SOLUTION_NAME $VERSION
 ```
 
-- Deploy the distributable to an Amazon S3 bucket in your account. _Note:_ You must have the AWS Command Line Interface installed.
+- Deploy the distributable to an Amazon S3 bucket in your account. Note: you must have the AWS Command Line Interface installed.
 
 ```
-aws s3 cp ./dist/ s3://my-bucket-name-<aws_region>/$SOLUTION_NAME/$VERSION/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name \n
+aws s3 cp ./global-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-framework/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
+aws s3 cp ./regional-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-framework/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
 ```
 
-- Get the link for the solution template uploaded to your Amazon S3 bucket.
-- Deploy the solution to your account by launching a new AWS CloudFormation stack using the link of the solution template in Amazon S3.
+---
+
+- Parameter details
+
+```
+$DIST_OUTPUT_BUCKET - This is the global name of the distribution. For the bucket name, the AWS Region is added to the global name (example: 'my-bucket-name-us-east-1') to create a regional bucket. The lambda artifact should be uploaded to the regional buckets for the CloudFormation template to pick it up for deployment.
+$SOLUTION_NAME - The name of This solution (example: aws-mlops-framework)
+$VERSION - The version number of the change
+```
 
 ## Known Issues
 
