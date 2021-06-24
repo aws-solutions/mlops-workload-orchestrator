@@ -167,6 +167,7 @@ def get_codepipeline_params(is_multi_account, stack_name, template_zip_name, tem
                 ("PRODACCOUNTID", os.environ["PROD_ACCOUNT_ID"]),
                 ("PRODORGID", os.environ["PROD_ORG_ID"]),
                 ("BLUEPRINTBUCKET", os.environ["BLUEPRINT_BUCKET"]),
+                ("DELEGATEDADMINACCOUNT", os.environ["IS_DELEGATED_ADMIN"]),
             ]
         )
 
@@ -175,12 +176,24 @@ def get_codepipeline_params(is_multi_account, stack_name, template_zip_name, tem
 
 def get_common_realtime_batch_params(event, region, stage):
     inference_instance = get_stage_param(event, "inference_instance", stage)
+    image_uri = (
+        get_image_uri(event.get("pipeline_type"), event, region) if os.environ["USE_MODEL_REGISTRY"] == "No" else ""
+    )
+    model_package_group_name = (
+        # model_package_name example: arn:aws:sagemaker:us-east-1:<ACCOUNT_ID>:model-package/xgboost/1
+        # the model_package_group_name in this case is "xgboost"
+        event.get("model_package_name").split("/")[1]
+        if os.environ["USE_MODEL_REGISTRY"] == "Yes"
+        else ""
+    )
     return [
         ("MODELNAME", event.get("model_name")),
-        ("MODELARTIFACTLOCATION", event.get("model_artifact_location")),
+        ("MODELARTIFACTLOCATION", event.get("model_artifact_location", "")),
         ("INFERENCEINSTANCE", inference_instance),
         ("CUSTOMALGORITHMSECRREPOARN", os.environ["ECR_REPO_ARN"]),
-        ("IMAGEURI", get_image_uri(event.get("pipeline_type"), event, region)),
+        ("IMAGEURI", image_uri),
+        ("MODELPACKAGEGROUPNAME", model_package_group_name),
+        ("MODELPACKAGENAME", event.get("model_package_name", "")),
     ]
 
 
@@ -333,7 +346,7 @@ def get_image_uri(pipeline_type, event, region):
         raise Exception("Unsupported pipeline by get_image_uri function")
 
 
-def get_required_keys(pipeline_type):
+def get_required_keys(pipeline_type, use_model_registry):
     # Realtime/batch pipelines
     if pipeline_type in [
         "byom_realtime_builtin",
@@ -341,17 +354,14 @@ def get_required_keys(pipeline_type):
         "byom_batch_builtin",
         "byom_batch_custom",
     ]:
-        common_keys = [
-            "pipeline_type",
-            "model_name",
-            "model_artifact_location",
-            "inference_instance",
-        ]
-        builtin_model_keys = [
-            "model_framework",
-            "model_framework_version",
-        ]
-        custom_model_keys = ["custom_image_uri"]
+        common_keys = ["pipeline_type", "model_name", "inference_instance"]
+        model_location = ["model_artifact_location"]
+        builtin_model_keys = ["model_framework", "model_framework_version"] + model_location
+        custom_model_keys = ["custom_image_uri"] + model_location
+        # if model registry is used
+        if use_model_registry == "Yes":
+            builtin_model_keys = custom_model_keys = ["model_package_name"]
+
         realtime_specific_keys = ["data_capture_location"]
         batch_specific_keys = ["batch_inference_data", "batch_job_output_location"]
 
@@ -403,7 +413,7 @@ def validate(event):
     :raises: BadRequest Exception
     """
     # get the required keys to validate the event
-    required_keys = get_required_keys(event.get("pipeline_type", ""))
+    required_keys = get_required_keys(event.get("pipeline_type", ""), os.environ["USE_MODEL_REGISTRY"])
     for key in required_keys:
         if key not in event:
             logger.error(f"Request event did not have parameter: {key}")

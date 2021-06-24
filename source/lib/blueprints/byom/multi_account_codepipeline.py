@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -21,7 +21,8 @@ from aws_cdk import (
     core,
 )
 from lib.blueprints.byom.pipeline_definitions.source_actions import source_action_template
-from lib.blueprints.byom.pipeline_definitions.deploy_actions import create_stackset_action, create_cloudformation_action
+from lib.blueprints.byom.pipeline_definitions.deploy_actions import create_stackset_action
+
 from lib.blueprints.byom.pipeline_definitions.approval_actions import approval_action
 from lib.blueprints.byom.pipeline_definitions.helpers import (
     pipeline_permissions,
@@ -29,7 +30,6 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_pipeline_bucket,
     suppress_iam_complex,
     suppress_sns,
-    suppress_cloudformation_action,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
     create_notification_email_parameter,
@@ -41,6 +41,8 @@ from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
     create_stack_name_parameter,
     create_account_id_parameter,
     create_org_id_parameter,
+    create_delegated_admin_parameter,
+    create_delegated_admin_condition,
 )
 
 
@@ -71,6 +73,10 @@ class MultiAccountCodePipelineStack(core.Stack):
         blueprint_bucket_name = create_blueprint_bucket_name_parameter(self)
         assets_bucket_name = create_assets_bucket_name_parameter(self)
         stack_name = create_stack_name_parameter(self)
+        # delegated admin account
+        is_delegated_admin = create_delegated_admin_parameter(self)
+        # create use delegated admin account condition
+        delegated_admin_account_condition = create_delegated_admin_condition(self, is_delegated_admin)
 
         # Resources #
         assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket", assets_bucket_name.value_as_string)
@@ -92,6 +98,12 @@ class MultiAccountCodePipelineStack(core.Stack):
         # source stage
         source_output, source_action_definition = source_action_template(template_zip_name, assets_bucket)
 
+        # use the first 8 characters from last portion of the stack_id as a unique id to be appended
+        # to stacksets names. Example stack_id:
+        # arn:aws:cloudformation:<region>:<account-id>:stack/<stack-name>/e45f0f20-c886-11eb-98d4-0a1157964cc9
+        # the selected id would be e45f0f20
+        unique_id = core.Fn.select(0, core.Fn.split("-", core.Fn.select(2, core.Fn.split("/", core.Aws.STACK_ID))))
+
         # DeployDev stage
         dev_deploy_lambda_arn, dev_stackset_action = create_stackset_action(
             self,
@@ -105,7 +117,8 @@ class MultiAccountCodePipelineStack(core.Stack):
             [dev_org_id.value_as_string],
             [core.Aws.REGION],
             assets_bucket,
-            f"{stack_name.value_as_string}-dev",
+            f"{stack_name.value_as_string}-dev-{unique_id}",
+            delegated_admin_account_condition,
         )
 
         # DeployStaging manual approval
@@ -129,7 +142,8 @@ class MultiAccountCodePipelineStack(core.Stack):
             [staging_org_id.value_as_string],
             [core.Aws.REGION],
             assets_bucket,
-            f"{stack_name.value_as_string}-staging",
+            f"{stack_name.value_as_string}-staging-{unique_id}",
+            delegated_admin_account_condition,
         )
 
         # DeployProd manual approval
@@ -153,7 +167,8 @@ class MultiAccountCodePipelineStack(core.Stack):
             [prod_org_id.value_as_string],
             [core.Aws.REGION],
             assets_bucket,
-            f"{stack_name.value_as_string}-prod",
+            f"{stack_name.value_as_string}-prod-{unique_id}",
+            delegated_admin_account_condition,
         )
 
         # create invoking lambda policy

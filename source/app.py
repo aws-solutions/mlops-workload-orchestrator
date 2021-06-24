@@ -20,32 +20,36 @@ from lib.blueprints.byom.single_account_codepipeline import SingleAccountCodePip
 from lib.blueprints.byom.multi_account_codepipeline import MultiAccountCodePipelineStack
 from lib.blueprints.byom.byom_custom_algorithm_image_builder import BYOMCustomAlgorithmImageBuilderStack
 from lib.aws_sdk_config_aspect import AwsSDKConfigAspect
+from lib.blueprints.byom.pipeline_definitions.cdk_context_value import get_cdk_context_value
 
-solution_id = "SO0136"
 app = core.App()
+solution_id = get_cdk_context_value(app, "SolutionId")
+version = get_cdk_context_value(app, "Version")
 
 mlops_stack_single = MLOpsStack(
-    app, "aws-mlops-single-account-framework", description=f"({solution_id}) - AWS MLOps Framework. Version %%VERSION%%"
+    app,
+    "aws-mlops-single-account-framework",
+    description=f"({solution_id}-sa) - AWS MLOps Framework (Single Account Option). Version {version}",
 )
 
 # add AWS_SDK_USER_AGENT env variable to Lambda functions
-core.Aspects.of(mlops_stack_single).add(AwsSDKConfigAspect(app, "SDKUserAgentSingle", solution_id))
+core.Aspects.of(mlops_stack_single).add(AwsSDKConfigAspect(app, "SDKUserAgentSingle", solution_id, version))
 
 mlops_stack_multi = MLOpsStack(
     app,
     "aws-mlops-multi-account-framework",
     multi_account=True,
-    description=f"({solution_id}) - AWS MLOps Framework. Version %%VERSION%%",
+    description=f"({solution_id}-ma) - AWS MLOps Framework (Multi Account Option). Version {version}",
 )
 
-core.Aspects.of(mlops_stack_multi).add(AwsSDKConfigAspect(app, "SDKUserAgentMulti", solution_id))
+core.Aspects.of(mlops_stack_multi).add(AwsSDKConfigAspect(app, "SDKUserAgentMulti", solution_id, version))
 
 BYOMCustomAlgorithmImageBuilderStack(
     app,
     "BYOMCustomAlgorithmImageBuilderStack",
     description=(
         f"({solution_id}byom-caib) - Bring Your Own Model pipeline to build custom algorithm docker images"
-        f"in AWS MLOps Framework. Version %%VERSION%%"
+        f"in AWS MLOps Framework. Version {version}"
     ),
 )
 
@@ -53,39 +57,39 @@ batch_stack = BYOMBatchStack(
     app,
     "BYOMBatchStack",
     description=(
-        f"({solution_id}byom-bt) - BYOM Batch Transform pipeline" f"in AWS MLOps Framework. Version %%VERSION%%"
+        f"({solution_id}byom-bt) - BYOM Batch Transform pipeline" f"in AWS MLOps Framework. Version {version}"
     ),
 )
 
-core.Aspects.of(batch_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentBatch", solution_id))
+core.Aspects.of(batch_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentBatch", solution_id, version))
 
 model_monitor_stack = ModelMonitorStack(
     app,
     "ModelMonitorStack",
-    description=(f"({solution_id}byom-mm) - Model Monitor pipeline. Version %%VERSION%%"),
+    description=(f"({solution_id}byom-mm) - Model Monitor pipeline. Version {version}"),
 )
 
-core.Aspects.of(model_monitor_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentMonitor", solution_id))
+core.Aspects.of(model_monitor_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentMonitor", solution_id, version))
 
 
 realtime_stack = BYOMRealtimePipelineStack(
     app,
     "BYOMRealtimePipelineStack",
-    description=(f"({solution_id}byom-rip) - BYOM Realtime Inference Pipleline. Version %%VERSION%%"),
+    description=(f"({solution_id}byom-rip) - BYOM Realtime Inference Pipleline. Version {version}"),
 )
 
-core.Aspects.of(realtime_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentRealtime", solution_id))
+core.Aspects.of(realtime_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentRealtime", solution_id, version))
 
 SingleAccountCodePipelineStack(
     app,
     "SingleAccountCodePipelineStack",
-    description=(f"({solution_id}byom-sac) - Single-account codepipeline. Version %%VERSION%%"),
+    description=(f"({solution_id}byom-sac) - Single-account codepipeline. Version {version}"),
 )
 
 MultiAccountCodePipelineStack(
     app,
     "MultiAccountCodePipelineStack",
-    description=(f"({solution_id}byom-mac) - Multi-account codepipeline. Version %%VERSION%%"),
+    description=(f"({solution_id}byom-mac) - Multi-account codepipeline. Version {version}"),
 )
 
 

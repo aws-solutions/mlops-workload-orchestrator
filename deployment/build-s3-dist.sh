@@ -67,6 +67,11 @@ echo "--------------------------------------------------------------------------
 
 echo "cd $source_dir"
 cd $source_dir
+
+# setup lambda layers (building sagemaker layer using lambda build environment for python 3.8)
+echo 'docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install --upgrade -r requirements.txt -t ./python; exit"'
+docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install --upgrade -r requirements.txt -t ./python; exit"
+
 echo "python3 -m venv .venv-prod"
 python3 -m venv .venv-prod
 echo "source .venv-prod/bin/activate"
@@ -81,10 +86,6 @@ pip install -r ./lambdas/custom_resource/requirements.txt -t ./lambdas/custom_re
 # setup crhelper for custom resource (solution helper)
 echo "pip install -r ./lambdas/solution_helper/requirements.txt -t ./lambdas/solution_helper/"
 pip install -r ./lambdas/solution_helper/requirements.txt -t ./lambdas/solution_helper/
-
-# setup lambda layers
-echo "pip install -r ./lib/blueprints/byom/lambdas/sagemaker_layer/requirements.txt -t ./lib/blueprints/byom/lambdas/sagemaker_layer/python/"
-pip install -r ./lib/blueprints/byom/lambdas/sagemaker_layer/requirements.txt -t ./lib/blueprints/byom/lambdas/sagemaker_layer/python/
 
 # setup crhelper for invoke lambda custom resource
 echo "pip install -r ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/"

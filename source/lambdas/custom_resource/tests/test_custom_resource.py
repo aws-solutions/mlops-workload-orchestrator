@@ -22,35 +22,32 @@ from index import copy_assets_to_s3, on_event, custom_resource, no_op
 
 @pytest.fixture(autouse=True)
 def mock_env_variables():
-    os.environ["source_bucket"] = "solutions-bucket"
-    os.environ["destination_bucket"] = "blueprints-bucket"
-    os.environ["TESTFILE"] = "blueprints.zip"
+    os.environ["SOURCE_BUCKET"] = "solutions-bucket"
+    os.environ["DESTINATION_BUCKET"] = "blueprints-bucket"
+    os.environ["FILE_KEY"] = "blueprints.zip"
 
 
 @pytest.fixture
 def event():
-    return {"bucket": os.environ["source_bucket"]}
+    return {"bucket": os.environ["SOURCE_BUCKET"]}
 
 
 @pytest.fixture
 def mocked_response():
-    return f"CopyAssets-{os.environ['destination_bucket']}"
+    return f"CopyAssets-{os.environ['DESTINATION_BUCKET']}"
 
 
 @mock_s3
 @patch("index.os.walk")
 @patch("index.shutil.unpack_archive")
-@patch("index.urllib.request.urlretrieve")
-def test_copy_assets_to_s3(mocked_urllib, mocked_shutil, mocked_walk, mocked_response):
+def test_copy_assets_to_s3(mocked_shutil, mocked_walk, mocked_response):
     s3_client = boto3.client("s3", region_name="us-east-1")
     testfile = tempfile.NamedTemporaryFile()
     s3_client.create_bucket(Bucket="solutions-bucket")
     s3_client.create_bucket(Bucket="blueprints-bucket")
-    s3_client.upload_file(testfile.name, os.environ["source_bucket"], os.environ["TESTFILE"])
+    s3_client.upload_file(testfile.name, os.environ["SOURCE_BUCKET"], os.environ["FILE_KEY"])
     local_file = tempfile.NamedTemporaryFile()
-    mocked_urllib.side_effect = s3_client.download_file(
-        os.environ["source_bucket"], os.environ["TESTFILE"], local_file.name
-    )
+    s3_client.download_file(os.environ["SOURCE_BUCKET"], os.environ["FILE_KEY"], local_file.name)
     tmp = tempfile.mkdtemp()
     mocked_walk.return_value = [
         (tmp, (local_file.name,), (local_file.name,)),

@@ -40,7 +40,7 @@ def custom_resource(event, _):
     resource_properties = event["ResourceProperties"]
     resource = resource_properties["Resource"]
 
-    if resource == "UUID" and request_type == "Create":
+    if resource == "UUID" and (request_type == "Create" or request_type == "Update"):
         random_id = str(uuid.uuid4())
         helper.Data.update({"UUID": random_id})
     elif resource == "AnonymousMetric":
@@ -49,21 +49,10 @@ def custom_resource(event, _):
             metrics_data["RequestType"] = request_type
 
             headers = {"Content-Type": "application/json"}
-            git_selected = ""
-            if len(resource_properties["gitSelected"]) > 0:
-                git_selected = "True"
-            else:
-                git_selected = "False"
-            # see if the customer provided an existing S3 bucket name
-            existing_bucket_selected = ""
-            if len(resource_properties["bucketSelected"]) > 0:
-                existing_bucket_selected = "True"
-            else:
-                existing_bucket_selected = "False"
+
+            # create the payload
             payload = {
                 "Solution": resource_properties["SolutionId"],
-                "gitSelected": git_selected,
-                "bucketSelected": existing_bucket_selected,
                 "UUID": resource_properties["UUID"],
                 "TimeStamp": datetime.utcnow().isoformat(),
                 "Data": metrics_data,
@@ -72,10 +61,8 @@ def custom_resource(event, _):
             logger.info(f"Sending payload: {payload}")
             response = requests.post("https://metrics.awssolutionsbuilder.com/generic", json=payload, headers=headers)
             logger.info(f"Response from metrics endpoint: {response.status_code} {response.reason}")
-        except requests.exceptions.RequestException:
-            logger.exception("Could not send usage data")
-        except Exception:
-            logger.exception("Unknown error when trying to send usage data")
+        except Exception as e:
+            logger.exception(f"Error when trying to send usage data: {str(e)}")
 
 
 def handler(event, context):

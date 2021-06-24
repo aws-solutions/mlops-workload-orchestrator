@@ -16,7 +16,6 @@ import shutil
 import tempfile
 import logging
 import traceback
-import urllib.request
 import boto3
 from crhelper import CfnResource
 
@@ -28,9 +27,10 @@ helper = CfnResource(json_logging=True, log_level="INFO")
 
 
 def copy_assets_to_s3(s3_client):
-    # get the source and destination locations
-    source_url = os.environ.get("source_bucket") + "/blueprints.zip"
-    bucket = os.environ.get("destination_bucket")
+    # get the source/destination bukcets and file key
+    s3_bucket_name = os.environ.get("SOURCE_BUCKET")
+    bucket = os.environ.get("DESTINATION_BUCKET")
+    file_key = os.environ.get("FILE_KEY")
     base_dir = "blueprints"
 
     # create a tmpdir for the zip file to downlaod
@@ -38,7 +38,7 @@ def copy_assets_to_s3(s3_client):
     zip_file_path = os.path.join(zip_tmpdir, f"{base_dir}.zip")
 
     # download blueprints.zip
-    urllib.request.urlretrieve(source_url, zip_file_path)
+    s3_client.download_file(s3_bucket_name, file_key, zip_file_path)
 
     # unpack the zip file in another tmp directory
     unpack_tmpdir = tempfile.mkdtemp()

@@ -455,3 +455,76 @@ def create_new_ecr_repo_condition(scope, existing_ecr_repo):
         "CreateECRRepo",
         expression=core.Fn.condition_equals(existing_ecr_repo.value_as_string, ""),
     )
+
+
+def create_delegated_admin_parameter(scope):
+    return core.CfnParameter(
+        scope,
+        "DELEGATED_ADMIN_ACCOUNT",
+        type="String",
+        allowed_values=["Yes", "No"],
+        default="Yes",
+        description="Is a delegated administrator account used to deploy accross account",
+    )
+
+
+def create_delegated_admin_condition(scope, delegated_admin_parameter):
+    return core.CfnCondition(
+        scope,
+        "UseDelegatedAdmin",
+        expression=core.Fn.condition_equals(delegated_admin_parameter.value_as_string, "Yes"),
+    )
+
+
+def create_use_model_registry_parameter(scope):
+    return core.CfnParameter(
+        scope,
+        "USE_MODEL_REGISTRY",
+        type="String",
+        allowed_values=["Yes", "No"],
+        default="No",
+        description="Will Amazon SageMaker's Model Registry be used to provision models?",
+    )
+
+
+def create_model_registry_parameter(scope):
+    return core.CfnParameter(
+        scope,
+        "CREATE_MODEL_REGISTRY",
+        type="String",
+        allowed_values=["Yes", "No"],
+        default="No",
+        description="Do you want the solution to create the SageMaker Model Package Group Name (i.e., Model Registry)",
+    )
+
+
+def create_model_registry_condition(scope, create_model_registry):
+    return core.CfnCondition(
+        scope,
+        "CreateModelRegistryCondition",
+        expression=core.Fn.condition_equals(create_model_registry.value_as_string, "Yes"),
+    )
+
+
+def create_model_package_group_name_parameter(scope):
+    return core.CfnParameter(
+        scope, "MODEL_PACKAGE_GROUP_NAME", type="String", description="SageMaker model package group name", min_length=0
+    )
+
+
+def create_model_package_name_parameter(scope):
+    return core.CfnParameter(
+        scope,
+        "MODEL_PACKAGE_NAME",
+        allowed_pattern="(^arn:aws[a-z\-]*:sagemaker:[a-z0-9\-]*:[0-9]{12}:model-package/.*|^$)",
+        type="String",
+        description="The model name (version arn) in SageMaker's model package name group",
+    )
+
+
+def create_model_registry_provided_condition(scope, model_package_name):
+    return core.CfnCondition(
+        scope,
+        "ModelRegistryProvided",
+        expression=core.Fn.condition_not(core.Fn.condition_equals(model_package_name, "")),
+    )

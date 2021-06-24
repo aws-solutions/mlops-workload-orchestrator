@@ -31,7 +31,7 @@ to repeat successful processes at scale.
 
 This solution is built with two primary components: 1) the orchestrator component, created by deploying the solution’s AWS CloudFormation template, and 2) the AWS CodePipeline instance deployed from either calling the solution’s API Gateway, or by committing a configuration file into an AWS CodeCommit repository. The solution’s pipelines are implemented as AWS CloudFormation templates, which allows you to extend the solution and add custom pipelines.
 
-To support multiple use cases and business needs, the solution provides two AWS CloudFormation templates: **option 1** for single account deployment, and **option 2** for multi-account deployment.
+To support multiple use cases and business needs, the solution provides two AWS CloudFormation templates: **option 1** for single account deployment, and **option 2** for multi-account deployment. In both templates, the solution provides the option to use Amazon SageMaker Model Registry to deploy versioned models.
 
 ### Template option 1: Single account deployment
 
@@ -41,7 +41,7 @@ The solution’s single account architecture allows you to provision ML pipeline
 
 ### Template option 2: Multi-account deployment
 
-The solution uses [AWS Organizations](https://aws.amazon.com/organizations/) and [AWS CloudFormation StackSets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/what-is-cfnstacksets.html) to allow you to provision or update ML pipelines across AWS accounts. Using an administrator account (also referred to as the orchestrator account) allows you to deploy ML pipelines implemented as AWS CloudFormation templates into selected target accounts (for example, development, staging, and production accounts).
+The solution uses [AWS Organizations](https://aws.amazon.com/organizations/) and [AWS CloudFormation StackSets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/what-is-cfnstacksets.html) to allow you to provision or update ML pipelines across AWS accounts. Using an AWS Organizations administrator account (a delegated administrator account or the management account), also referred to as the orchestrator account, allows you to deploy ML pipelines implemented as AWS CloudFormation templates into selected target accounts (for example, development, staging, and production accounts).
 
 ![architecture-option-2](source/architecture-option-2.png)
 
@@ -79,6 +79,12 @@ Upon successfully cloning the repository into your local development environment
 
 ## Creating a custom build
 
+### Prerequisites
+
+- Python 3.8
+- [AWS Command Line Interface](https://aws.amazon.com/cli/)
+- Docker (required to build the AWS Lambda layer for Amazon SageMaker SDK)
+
 ### 1. Clone the repository
 
 Clone this git repository.
@@ -113,7 +119,7 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET $SOLUTION_NAME $VERSION
 ```
 
-- Deploy the distributable to an Amazon S3 bucket in your account. Note: you must have the AWS Command Line Interface installed.
+- Upload the distributable assets to your Amazon S3 bucket in your account. Note: Ensure that you own the Amazon S3 bucket before uploading the assets. To upload the assets to the S3 bucket, you can use the AWS Console or the AWS CLI as shown below.
 
 ```
 aws s3 cp ./global-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-framework/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
@@ -130,6 +136,14 @@ $SOLUTION_NAME - The name of This solution (example: aws-mlops-framework)
 $VERSION - The version number of the change
 ```
 
+## Uninstall the solution
+
+Please refer to the [Uninstall the solution section](https://docs.aws.amazon.com/solutions/latest/aws-mlops-framework/uninstall-the-solution.html) in the [solution's implementation guide](https://docs.aws.amazon.com/solutions/latest/aws-mlops-framework/welcome.html).
+
+## Collection of operational metrics
+
+This solution collects anonymous operational metrics to help AWS improve the quality and features of the solution. For more information, including how to disable this capability, please see the [implementation guide](https://docs.aws.amazon.com/solutions/latest/aws-mlops-framework/operational-metrics.html).
+
 ## Known Issues
 
 ### Image Builder Pipeline may fail due to Docker Hub rate limits
@@ -140,16 +154,6 @@ When building custom model container that pulls public docker images from Docker
 This is due to Docker Inc. [limiting the rate at which images are pulled under Docker Hub anonymous and free plans](https://docs.docker.com/docker-hub/download-rate-limit/). Under the new limits of Dockerhub, free plan anonymous use is limited to 100 pulls per six hours, free plan authenticated accounts limited to 200 pulls per six hours, and Pro and Team accounts do not see any rate limits.
 
 For more information regarding this issue and short-term and long-term fixes, refer to this AWS blog post: [Advice for customers dealing with Docker Hub rate limits, and a Coming Soon announcement](https://aws.amazon.com/blogs/containers/advice-for-customers-dealing-with-docker-hub-rate-limits-and-a-coming-soon-announcement/)
-
-### Model Monitor Blueprint may fail in multi-account deployment option
-
-When using the blueprint for Model Monitor pipeline in multi-account deployment option, the deployment of the stack in the staging ("DeployStaging") account may fail with an error message:
-
-```
-Resource handler returned message: "Error occurred during operation 'CREATE'." (RequestToken:<token-id>, HandlerErrorCode: GeneralServiceException)
-```
-
-Workaround: there is no known workaround for this issue for the multi-account Model Monitor blueprint.
 
 ---
 

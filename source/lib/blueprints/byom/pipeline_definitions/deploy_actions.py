@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -10,7 +10,6 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-import uuid
 from aws_cdk import (
     aws_iam as iam,
     aws_lambda as lambda_,
@@ -19,12 +18,12 @@ from aws_cdk import (
     core,
 )
 from lib.blueprints.byom.pipeline_definitions.helpers import (
-    codepipeline_policy,
     suppress_lambda_policies,
     suppress_pipeline_policy,
     add_logs_policy,
 )
 from lib.conditional_resource import ConditionalResources
+from lib.blueprints.byom.pipeline_definitions.cdk_context_value import get_cdk_context_value
 from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     create_service_role,
     sagemaker_baseline_job_policy,
@@ -35,6 +34,7 @@ from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     cloudformation_stackset_policy,
     cloudformation_stackset_instances_policy,
     kms_policy_document,
+    delegated_admin_policy_document,
 )
 
 
@@ -278,6 +278,7 @@ def create_stackset_action(
     regions,
     assets_bucket,
     stack_name,
+    delegated_admin_condition,
 ):
     """
     create_stackset_action an invokeLambda action to be added to AWS Codepipeline stage
@@ -294,6 +295,7 @@ def create_stackset_action(
     :regions: list of regions where the stack with be deployed
     :assets_bucket: the bucket cdk object where pipeline assets are stored
     :stack_name: name of the stack to be deployed
+    :delegated_admin_condition: CDK condition to indicate if a delegated admin account is used
     :return: codepipeline invokeLambda action in a form of a CDK object that can be attached to a codepipeline stage
     """
     # creating a role so that this lambda can create a baseline job
@@ -303,15 +305,27 @@ def create_stackset_action(
         lambda_service,
         "The role that is assumed by create_update_cf_stackset Lambda function.",
     )
-    # make the stackset name unique
-    stack_name = f"{stack_name}-{str(uuid.uuid4())[:8]}"
+
     # cloudformation stackset permissions
-    cloudformation_stackset_permissions = cloudformation_stackset_policy(stack_name)
-    cloudformation_stackset_instances_permissions = cloudformation_stackset_instances_policy(stack_name)
+    # get the account_id based on whether a delegated admin account or management account is used
+    account_id = core.Fn.condition_if(
+        delegated_admin_condition.logical_id,
+        "*",  # used when a delegated admin account is used (i.e., the management account_id is not known)
+        core.Aws.ACCOUNT_ID,  # used when the management account is used
+    ).to_string()
+    cloudformation_stackset_permissions = cloudformation_stackset_policy(stack_name, account_id)
+    cloudformation_stackset_instances_permissions = cloudformation_stackset_instances_policy(stack_name, account_id)
 
     lambda_role.add_to_policy(cloudformation_stackset_permissions)
     lambda_role.add_to_policy(cloudformation_stackset_instances_permissions)
     add_logs_policy(lambda_role)
+
+    # add delegated admin account policy
+    delegated_admin_policy = delegated_admin_policy_document(scope, f"{action_name}DelegatedAdminPolicy")
+    # create only if a delegated admin account is used
+    core.Aspects.of(delegated_admin_policy).add(ConditionalResources(delegated_admin_condition))
+    # attached the policy to the role
+    delegated_admin_policy.attach_to_role(lambda_role)
 
     # defining the lambda function that gets invoked in this stage
     create_update_cf_stackset_lambda = lambda_.Function(
@@ -322,6 +336,10 @@ def create_stackset_action(
         role=lambda_role,
         code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_update_cf_stackset.zip"),
         timeout=core.Duration.minutes(15),
+        # setup the CallAS for CF StackSet
+        environment={
+            "CALL_AS": core.Fn.condition_if(delegated_admin_condition.logical_id, "DELEGATED_ADMIN", "SELF").to_string()
+        },
     )
 
     create_update_cf_stackset_lambda.node.default_child.cfn_options.metadata = suppress_lambda_policies()
@@ -434,3 +452,107 @@ def create_invoke_lambda_custom_resource(
     )
 
     return invoke_lambda_custom_resource
+
+
+def create_copy_assets_lambda(scope, blueprint_repository_bucket_name):
+    """
+    create_copy_assets_lambda creates the custom resource's lambda function to copy assets to s3
+
+    :scope: CDK Construct scope that's needed to create CDK resources
+    :blueprint_repository_bucket_name: name of the blueprint S3 bucket
+
+    :return: CDK Lambda Function
+    """
+    # if you're building the solution locally, replace source_bucket and file_key with your values
+    source_bucket = f"{get_cdk_context_value(scope, 'SourceBucket')}-{core.Aws.REGION}"
+    file_key = (
+        f"{get_cdk_context_value(scope,'SolutionName')}/{get_cdk_context_value(scope,'Version')}/"
+        f"{get_cdk_context_value(scope,'BlueprintsFile')}"
+    )
+
+    custom_resource_lambda_fn = lambda_.Function(
+        scope,
+        "CustomResourceLambda",
+        code=lambda_.Code.from_asset("lambdas/custom_resource"),
+        handler="index.on_event",
+        runtime=lambda_.Runtime.PYTHON_3_8,
+        memory_size=256,
+        environment={
+            "SOURCE_BUCKET": source_bucket,
+            "FILE_KEY": file_key,
+            "DESTINATION_BUCKET": blueprint_repository_bucket_name,
+            "LOG_LEVEL": "INFO",
+        },
+        timeout=core.Duration.minutes(10),
+    )
+
+    custom_resource_lambda_fn.node.default_child.cfn_options.metadata = suppress_lambda_policies()
+    # grant permission to download the file from the source bucket
+    custom_resource_lambda_fn.add_to_role_policy(
+        s3_policy_read([f"arn:aws:s3:::{source_bucket}", f"arn:aws:s3:::{source_bucket}/*"])
+    )
+
+    return custom_resource_lambda_fn
+
+
+def create_solution_helper(scope):
+    """
+    create_solution_helper creates the solution helper lambda function
+
+    :scope: CDK Construct scope that's needed to create CDK resources
+
+    :return: CDK Lambda Function
+    """
+    helper_function = lambda_.Function(
+        scope,
+        "SolutionHelper",
+        code=lambda_.Code.from_asset("lambdas/solution_helper"),
+        handler="lambda_function.handler",
+        runtime=lambda_.Runtime.PYTHON_3_8,
+        timeout=core.Duration.minutes(5),
+    )
+
+    helper_function.node.default_child.cfn_options.metadata = suppress_lambda_policies()
+
+    return helper_function
+
+
+def create_uuid_custom_resource(scope, create_model_registry, helper_function_arn):
+    """
+    create_uuid_custom_resource creates the CreateUUID Custom Resource
+
+    :scope: CDK Construct scope that's needed to create CDK resources
+    :create_model_registry: whether or not the solution will create a SageMaker Model registry (Yes/No)
+    :helper_function_arn: solution helper lambda function arn
+
+    :return: CDK Custom Resource
+    """
+    return core.CustomResource(
+        scope,
+        "CreateUniqueID",
+        service_token=helper_function_arn,
+        # add the template's paramater "create_model_registry" to the custom resource properties
+        # so that a new UUID is generated when this value is updated
+        # the generated UUID is appeneded to the name of the model registry to be created
+        properties={"Resource": "UUID", "CreateModelRegistry": create_model_registry},
+        resource_type="Custom::CreateUUID",
+    )
+
+
+def create_send_data_custom_resource(scope, helper_function_arn, properties):
+    """
+    create_send_data_custom_resource creates AnonymousData Custom Resource
+
+    :scope: CDK Construct scope that's needed to create CDK resources
+    :helper_function_arn: solution helper lambda function arn
+    :properties: Custom Resource properties
+
+    :return: CDK Custom Resource
+    """
+    return core.CustomResource(
+        scope,
+        "SendAnonymousData",
+        service_token=helper_function_arn,
+        properties=properties,
+        resource_type="Custom::AnonymousData",
+    )

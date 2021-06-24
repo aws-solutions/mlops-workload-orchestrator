@@ -2,6 +2,11 @@
   "app": "python3 app.py",
   "context": {
     "@aws-cdk/core:enableStackNameDuplicates": "true",
-    "aws-cdk:enableDiffNoFail": "true"
+    "aws-cdk:enableDiffNoFail": "true",
+    "SolutionId": "SO0136",
+    "SolutionName":"%%SOLUTION_NAME%%",
+    "Version": "%%VERSION%%",
+    "SourceBucket": "%%BUCKET_NAME%%",
+    "BlueprintsFile": "blueprints.zip"
   }
 }

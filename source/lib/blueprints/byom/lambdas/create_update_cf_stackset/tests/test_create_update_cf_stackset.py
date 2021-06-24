@@ -221,8 +221,7 @@ def test_update_stackset_error(
 def test_stackset_exists(stackset_name, mocked_template, mocked_template_parameters, mocked_regions):
     cf_client = boto3.client("cloudformation", region_name=mocked_regions[0])
     # assert the stackset does not exist
-    with pytest.raises(Exception):
-        stackset_exists(stackset_name, cf_client)
+    assert stackset_exists(stackset_name, cf_client) is False
 
     # create mocked stackset
     cf_client.create_stack_set(

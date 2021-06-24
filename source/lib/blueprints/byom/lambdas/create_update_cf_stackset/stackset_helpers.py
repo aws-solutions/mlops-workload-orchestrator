@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright  Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -10,8 +10,9 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-from boto3.session import Session
 import json
+from boto3.session import Session
+import os
 import zipfile
 import tempfile
 import botocore
@@ -19,6 +20,10 @@ from shared.logger import get_logger
 from shared.helper import get_client
 
 logger = get_logger(__name__)
+
+# Get the AWS Orginization's setup of "CallAs"
+# If delegated admin account is used, CALL_AS = "DELEGATED_ADMIN", else CALL_AS = "SELF").
+call_as = os.environ.get("CALL_AS", "SELF")
 
 
 def find_artifact(artifacts, name):
@@ -102,6 +107,7 @@ def update_stackset(stackset_name, template, parameters, org_ids, regions, cf_cl
             DeploymentTargets={"OrganizationalUnitIds": org_ids},
             AutoDeployment={"Enabled": False},
             Regions=regions,
+            CallAs=call_as,
         )
         return True
 
@@ -127,10 +133,10 @@ def stackset_exists(stackset_name, cf_client):
     """
     try:
         logger.info(f"Checking if StackSet {stackset_name} exits.")
-        cf_client.describe_stack_set(StackSetName=stackset_name)
+        cf_client.describe_stack_set(StackSetName=stackset_name, CallAs=call_as)
         return True
-    except botocore.exceptions.ClientError as e:
-        if f"StackSet {stackset_name} not found" in e.response["Error"]["Message"]:
+    except Exception as e:
+        if f"{stackset_name} not found" in str(e) or f"{stackset_name} does not exist" in str(e):
             logger.info(f"StackSet {stackset_name} does not exist.")
             return False
         else:
@@ -161,6 +167,7 @@ def create_stackset_and_instances(stackset_name, template, parameteres, org_ids,
             Capabilities=["CAPABILITY_NAMED_IAM"],
             PermissionModel="SERVICE_MANAGED",
             AutoDeployment={"Enabled": False},
+            CallAs=call_as,
         )
 
         # Then create StackSet instances
@@ -169,6 +176,7 @@ def create_stackset_and_instances(stackset_name, template, parameteres, org_ids,
             StackSetName=stackset_name,
             DeploymentTargets={"OrganizationalUnitIds": org_ids},
             Regions=regions,
+            CallAs=call_as,
         )
 
     except botocore.exceptions.ClientError as e:
@@ -196,9 +204,12 @@ def get_stackset_instance_status(stackset_name, stack_instance_account_id, regio
     try:
         logger.info(f"Checking the status of {stackset_name} instance")
         stack_instance_description = cf_client.describe_stack_instance(
-            StackSetName=stackset_name, StackInstanceAccount=stack_instance_account_id, StackInstanceRegion=region
+            StackSetName=stackset_name,
+            StackInstanceAccount=stack_instance_account_id,
+            StackInstanceRegion=region,
+            CallAs=call_as,
         )
-        # Status could be on of 'PENDING'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELLED'|'INOPERABLE'
+        # Status could be one of 'PENDING'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELLED'|'INOPERABLE'
         return stack_instance_description["StackInstance"]["StackInstanceStatus"]["DetailedStatus"]
 
     except botocore.exceptions.ClientError as e:

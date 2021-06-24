@@ -43,6 +43,10 @@ def mock_env_variables():
     os.environ["SCHEDULEEXP"] = "cron(0 * ? * * *)"
     os.environ["CUSTOMIMAGE"] = "custom/custom_image.zip"
     os.environ["TESTFILE"] = "testfile.zip"
+    os.environ["USE_MODEL_REGISTRY"] = "No"
+    os.environ["IS_DELEGATED_ADMIN"] = "No"
+    os.environ["MODEL_PACKAGE_GROUP_NAME"] = "xgboost"
+    os.environ["MODEL_PACKAGE_NAME"] = "arn:aws:sagemaker:*:*:model-package/xgboost/1"
 
 
 @pytest.fixture
@@ -52,6 +56,7 @@ def api_byom_event():
             "pipeline_type": pipeline_type,
             "model_name": "testmodel",
             "model_artifact_location": os.environ["MODELARTIFACTLOCATION"],
+            "model_package_name": os.environ["MODEL_PACKAGE_NAME"],
         }
         if is_multi:
             event["inference_instance"] = {
@@ -130,6 +135,8 @@ def expected_params_realtime_custom():
         ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
         ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
         ("IMAGEURI", "custom-image-uri"),
+        ("MODELPACKAGEGROUPNAME", ""),
+        ("MODELPACKAGENAME", os.environ["MODEL_PACKAGE_NAME"]),
         ("DATACAPTURELOCATION", os.environ["DATACAPTURE"]),
     ]
 
@@ -163,6 +170,8 @@ def expected_common_realtime_batch_params():
         ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
         ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
         ("IMAGEURI", "custom-image-uri"),
+        ("MODELPACKAGEGROUPNAME", ""),
+        ("MODELPACKAGENAME", os.environ["MODEL_PACKAGE_NAME"]),
     ]
 
 
@@ -231,6 +240,8 @@ def expected_batch_params():
         ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
         ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
         ("IMAGEURI", "custom-image-uri"),
+        ("MODELPACKAGEGROUPNAME", ""),
+        ("MODELPACKAGENAME", os.environ["MODEL_PACKAGE_NAME"]),
         ("BATCHINPUTBUCKET", "inference"),
         ("BATCHINFERENCEDATA", os.environ["INFERENCEDATA"]),
         ("BATCHOUTPUTLOCATION", os.environ["BATCHOUTPUT"]),
@@ -239,15 +250,26 @@ def expected_batch_params():
 
 @pytest.fixture
 def required_api_byom_realtime_builtin():
-    return [
-        "pipeline_type",
-        "model_name",
-        "model_artifact_location",
-        "inference_instance",
-        "data_capture_location",
-        "model_framework",
-        "model_framework_version",
-    ]
+    def _required_api_byom_realtime_builtin(use_model_registry):
+        required_keys = [
+            "pipeline_type",
+            "model_name",
+            "inference_instance",
+            "data_capture_location",
+        ]
+        if use_model_registry == "Yes":
+            required_keys.extend(["model_package_name"])
+        else:
+            required_keys.extend(
+                [
+                    "model_framework",
+                    "model_framework_version",
+                    "model_artifact_location",
+                ]
+            )
+        return required_keys
+
+    return _required_api_byom_realtime_builtin
 
 
 @pytest.fixture

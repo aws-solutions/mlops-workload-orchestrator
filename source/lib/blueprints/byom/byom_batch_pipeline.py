@@ -35,6 +35,9 @@ from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
     create_model_name_parameter,
     create_custom_algorithms_ecr_repo_arn_provided_condition,
     create_kms_key_arn_provided_condition,
+    create_model_package_name_parameter,
+    create_model_registry_provided_condition,
+    create_model_package_group_name_parameter,
 )
 
 
@@ -54,12 +57,15 @@ class BYOMBatchStack(core.Stack):
         batch_input_bucket = create_batch_input_bucket_name_parameter(self)
         batch_inference_data = create_batch_inference_data_parameter(self)
         batch_job_output_location = create_batch_job_output_location_parameter(self)
+        model_package_group_name = create_model_package_group_name_parameter(self)
+        model_package_name = create_model_package_name_parameter(self)
 
         # Conditions
         custom_algorithms_ecr_repo_arn_provided = create_custom_algorithms_ecr_repo_arn_provided_condition(
             self, custom_algorithms_ecr_repo_arn
         )
         kms_key_arn_provided = create_kms_key_arn_provided_condition(self, kms_key_arn)
+        model_registry_provided = create_model_registry_provided_condition(self, model_package_name)
 
         # Resources #
         assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket", assets_bucket_name.value_as_string)
@@ -74,12 +80,14 @@ class BYOMBatchStack(core.Stack):
             "MLOpsSagemakerBatchRole",
             custom_algorithms_ecr_arn=custom_algorithms_ecr_repo_arn.value_as_string,
             kms_key_arn=kms_key_arn.value_as_string,
+            model_package_group_name=model_package_group_name.value_as_string,
             assets_bucket_name=assets_bucket_name.value_as_string,
             input_bucket_name=batch_input_bucket.value_as_string,
             input_s3_location=batch_inference_data.value_as_string,
             output_s3_location=batch_job_output_location.value_as_string,
             ecr_repo_arn_provided_condition=custom_algorithms_ecr_repo_arn_provided,
             kms_key_arn_provided_condition=kms_key_arn_provided,
+            model_registry_provided_condition=model_registry_provided,
         )
 
         # create sagemaker model
@@ -87,11 +95,12 @@ class BYOMBatchStack(core.Stack):
             self,
             "MLOpsSagemakerModel",
             execution_role=sagemaker_role,
-            primary_container={
-                "image": algorithm_image_uri.value_as_string,
-                "modelDataUrl": f"s3://{assets_bucket_name.value_as_string}/{model_artifact_location.value_as_string}",
-            },
-            tags=[{"key": "model_name", "value": model_name.value_as_string}],
+            model_registry_provided=model_registry_provided,
+            algorithm_image_uri=algorithm_image_uri.value_as_string,
+            assets_bucket_name=assets_bucket_name.value_as_string,
+            model_artifact_location=model_artifact_location.value_as_string,
+            model_package_name=model_package_name.value_as_string,
+            model_name=model_name.value_as_string,
         )
 
         # create batch tranform lambda

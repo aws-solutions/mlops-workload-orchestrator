@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2021-06-24
+
+### Added
+
+- The option to use [Amazon SageMaker Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html) to deploy versioned models. The model registry allows you to catalog models for production, manage model versions, associate metadata with models, manage the approval status of a model, deploy models to production, and automate model deployment with CI/CD.
+- The option to use an [AWS Organizations delegated administrator account](https://docs.amazonaws.cn/en_us/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html) to orchestrate the deployment of Machine Learning (ML) workloads across the AWS Organizations accounts using AWS CloudFormation StackSets.
+
+### Updated
+
+- The build of the AWS Lambda layer for Amazon SageMaker SDK using the lambda:build-python3.8 Docker image.
+
 ## [1.2.0] - 2021-05-04
 
 ### Added

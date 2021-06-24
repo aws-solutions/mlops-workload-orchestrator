@@ -293,3 +293,16 @@ def suppress_lambda_event_mapping():
             ]
         }
     }
+
+
+def suppress_delegated_admin_policy():
+    return {
+        "cfn_nag": {
+            "rules_to_suppress": [
+                {
+                    "id": "W12",
+                    "reason": "organizations:ListDelegatedAdministrators can not have a restricted resource.",
+                }
+            ]
+        }
+    }

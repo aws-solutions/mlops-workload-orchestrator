@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright  Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -10,20 +10,28 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-import jsii
-import json
-from aws_cdk.core import IAspect, IConstruct, Construct
-from aws_cdk.aws_lambda import Function
+from aws_cdk import aws_sagemaker as sagemaker, core
 
 
-@jsii.implements(IAspect)
-class AwsSDKConfigAspect(Construct):
-    def __init__(self, scope: Construct, id: str, solution_id: str, version: str):
-        super().__init__(scope, id)
-        self.solution_id = solution_id
-        self.version = version
+def create_sagemaker_model_registry(scope, id, model_package_group_name):
+    """
+    create_sagemaker_model_registry creates SageMaker model package group (i.e., model registry)
 
-    def visit(self, node: IConstruct):
-        if isinstance(node, Function):
-            user_agent = json.dumps({"user_agent_extra": f"AwsSolution/{self.solution_id}/{self.version}"})
-            node.add_environment(key="AWS_SDK_USER_AGENT", value=user_agent)
+    :scope: CDK Construct scope that's needed to create CDK resources
+    :model_package_group_name: the name of the model package group name to be created
+
+    :return: SageMaker model package group CDK object
+    """
+    # create model registry
+    model_registry = sagemaker.CfnModelPackageGroup(
+        scope,
+        id,
+        model_package_group_name=model_package_group_name,
+        model_package_group_description="SageMaker model package group name (model registry) for mlops",
+        tags=[{"key": "stack-name", "value": core.Aws.STACK_NAME}],
+    )
+
+    # add update/deletion policy
+    model_registry.apply_removal_policy(core.RemovalPolicy.RETAIN)
+
+    return model_registry

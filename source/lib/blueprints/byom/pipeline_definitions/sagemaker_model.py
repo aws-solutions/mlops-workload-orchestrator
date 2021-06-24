@@ -10,14 +10,46 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-from aws_cdk import (
-    aws_sagemaker as sagemaker,
-)
+from aws_cdk import aws_sagemaker as sagemaker, core
 
 
-def create_sagemaker_model(scope, id, execution_role, **kwargs):
+def create_sagemaker_model(
+    scope,  # NOSONAR:S107 this function is designed to take many arguments
+    id,
+    execution_role,
+    model_registry_provided,
+    algorithm_image_uri,
+    assets_bucket_name,
+    model_artifact_location,
+    model_package_name,
+    model_name,
+    **kwargs,
+):
     # Create the model
-    model = sagemaker.CfnModel(scope, id, execution_role_arn=execution_role.role_arn, **kwargs)
+    model = sagemaker.CfnModel(
+        scope,
+        id,
+        execution_role_arn=execution_role.role_arn,
+        # the primary container is set based on whether the SageMaker model registry is used or not
+        # if model registry is used, the "modelPackageName" must be provided
+        # else "image" and "modelDataUrl" must be provided
+        # "image" and "modelDataUrl" will be ignored if "modelPackageName" is provided
+        primary_container={
+            "image": core.Fn.condition_if(
+                model_registry_provided.logical_id, core.Aws.NO_VALUE, algorithm_image_uri
+            ).to_string(),
+            "modelDataUrl": core.Fn.condition_if(
+                model_registry_provided.logical_id,
+                core.Aws.NO_VALUE,
+                f"s3://{assets_bucket_name}/{model_artifact_location}",
+            ).to_string(),
+            "modelPackageName": core.Fn.condition_if(
+                model_registry_provided.logical_id, model_package_name, core.Aws.NO_VALUE
+            ).to_string(),
+        },
+        tags=[{"key": "model_name", "value": model_name}],
+        **kwargs,
+    )
 
     # add dependency on the Sagemaker execution role
     model.node.add_dependency(execution_role)

@@ -42,8 +42,8 @@ class LambdaTest(unittest.TestCase):
             "ResourceProperties": {
                 "Resource": "AnonymousMetric",
                 "SolutionId": "SO1234",
-                "gitSelected": "Test",
-                "bucketSelected": "test-bucket",
+                "gitSelected": "True",
+                "bucketSelected": "False",
                 "UUID": "some-uuid",
                 "Foo": "Bar",
             },
@@ -69,17 +69,16 @@ class LambdaTest(unittest.TestCase):
         self.assertIn("Data", actual_payload)
         self.assertEqual(
             actual_payload["Data"],
-            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "Test", "bucketSelected": "test-bucket"},
+            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "True", "bucketSelected": "False"},
         )
 
-        # no values provided
-        event["ResourceProperties"].update({"gitSelected": ""})
-        event["ResourceProperties"].update({"bucketSelected": ""})
+        # delete a key from the resource properties. It should send data with no errors
+        del event["ResourceProperties"]["bucketSelected"]
         custom_resource(event, None)
         actual_payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(
             actual_payload["Data"],
-            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "", "bucketSelected": ""},
+            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "True"},
         )
 
     @mock.patch("requests.post")

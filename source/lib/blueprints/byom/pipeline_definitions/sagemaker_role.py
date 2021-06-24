@@ -27,9 +27,7 @@ from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     s3_policy_write,
     pass_role_policy_statement,
     get_role_policy_statement,
-)
-from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_custom_algorithms_ecr_repo_arn_provided_condition,
+    model_registry_policy_document,
 )
 
 
@@ -38,20 +36,24 @@ def create_sagemaker_role(
     id,
     custom_algorithms_ecr_arn,
     kms_key_arn,
+    model_package_group_name,
     assets_bucket_name,
     input_bucket_name,
     input_s3_location,
     output_s3_location,
     ecr_repo_arn_provided_condition,
     kms_key_arn_provided_condition,
+    model_registry_provided_condition,
 ):
     # create optional polocies
     ecr_policy = ecr_policy_document(scope, "MLOpsECRPolicy", custom_algorithms_ecr_arn)
     kms_policy = kms_policy_document(scope, "MLOpsKmsPolicy", kms_key_arn)
+    model_registry = model_registry_policy_document(scope, "ModelRegistryPolicy", model_package_group_name)
 
     # add conditions to KMS and ECR policies
     core.Aspects.of(kms_policy).add(ConditionalResources(kms_key_arn_provided_condition))
     core.Aspects.of(ecr_policy).add(ConditionalResources(ecr_repo_arn_provided_condition))
+    core.Aspects.of(model_registry).add(ConditionalResources(model_registry_provided_condition))
 
     # create sagemaker role
     role = iam.Role(scope, id, assumed_by=iam.ServicePrincipal("sagemaker.amazonaws.com"))
@@ -98,5 +100,6 @@ def create_sagemaker_role(
     # attach the conditional policies
     kms_policy.attach_to_role(role)
     ecr_policy.attach_to_role(role)
+    model_registry.attach_to_role(role)
 
     return role

@@ -141,6 +141,16 @@ def test_handler():
         handler(event, {})
         mock_pipeline_status.assert_called_with(json.loads(event["body"]))
 
+        # test the returned response "statusCode": 500
+        mock_pipeline_status.side_effect = Exception()
+        response = handler(event, {})
+        assert response == {
+            "statusCode": 500,
+            "isBase64Encoded": False,
+            "body": json.dumps({"message": "Internal server error. See logs for more information."}),
+            "headers": {"Content-Type": "plain/text"},
+        }
+
 
 def test_clean_param():
     test_path = "path/to/prefix"
@@ -446,40 +456,44 @@ def test_get_required_keys(
     required_api_image_builder,
 ):
     # Required keys in byom, realtime, builtin
-    returned_keys = get_required_keys("byom_realtime_builtin")
-    expected_keys = required_api_byom_realtime_builtin
+    returned_keys = get_required_keys("byom_realtime_builtin", "No")
+    expected_keys = required_api_byom_realtime_builtin("No")
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in byom, batch, builtin
-    returned_keys = get_required_keys("byom_batch_builtin")
+    returned_keys = get_required_keys("byom_batch_builtin", "No")
     expected_keys = required_api_byom_batch_builtin
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in byom, realtime, custom
-    returned_keys = get_required_keys("byom_realtime_custom")
+    returned_keys = get_required_keys("byom_realtime_custom", "No")
     expected_keys = required_api_byom_realtime_custom
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in byom, batch, custom
-    returned_keys = get_required_keys("byom_batch_custom")
+    returned_keys = get_required_keys("byom_batch_custom", "No")
     expected_keys = required_api_byom_batch_custom
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in model_monitor, default (no monitoring_type provided)
-    returned_keys = get_required_keys("byom_model_monitor")
+    returned_keys = get_required_keys("byom_model_monitor", "No")
     expected_keys = required_api_keys_model_monitor()
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in model_monitor, with monitoring_type provided
-    returned_keys = get_required_keys("byom_model_monitor")
+    returned_keys = get_required_keys("byom_model_monitor", "No")
     expected_keys = required_api_keys_model_monitor(True)
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in image builder
-    returned_keys = get_required_keys("byom_image_builder")
+    returned_keys = get_required_keys("byom_image_builder", "No")
     expected_keys = required_api_image_builder
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # assert for exceptions
     with pytest.raises(BadRequest) as exceinfo:
-        get_required_keys({"pipeline_type": "not_supported"})
+        get_required_keys({"pipeline_type": "not_supported"}, "No")
     assert (
         str(exceinfo.value)
         == "Bad request format. Pipeline type not supported. Check documentation for API & config formats"
     )
+    # Test with model registry used
+    returned_keys = get_required_keys("byom_realtime_builtin", "Yes")
+    expected_keys = required_api_byom_realtime_builtin("Yes")
+    TestCase().assertCountEqual(expected_keys, returned_keys)
 
 
 def test_get_stage_param(api_byom_event):
@@ -561,6 +575,10 @@ def test_get_image_uri(mocked_sm, api_byom_event):
         region="us-east-1",
         version=builtin_event.get("model_framework_version"),
     )
+    # assert exception for an unspported pipeline
+    with pytest.raises(Exception) as exc:
+        get_image_uri("not_spoorted_pipeline", builtin_event, "us-east-1")
+    assert str(exc.value) == "Unsupported pipeline by get_image_uri function"
 
 
 @patch("boto3.client")
@@ -617,6 +635,7 @@ def test_get_codepipeline_params():
             ("PRODACCOUNTID", "prod_account_id"),
             ("PRODORGID", "prod_org_id"),
             ("BLUEPRINTBUCKET", "testbucket"),
+            ("DELEGATEDADMINACCOUNT", "No"),
         ],
     )
     # single account codepipeline
