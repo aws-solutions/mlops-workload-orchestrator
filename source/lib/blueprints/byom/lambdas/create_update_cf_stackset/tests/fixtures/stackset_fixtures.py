@@ -61,7 +61,7 @@ def required_user_params():
         "artifact",
         "template_file",
         "stage_params_file",
-        "accound_ids",
+        "account_ids",
         "org_ids",
         "regions",
     ]
@@ -74,7 +74,7 @@ def mocked_decoded_parameters():
         "artifact": "SourceArtifact",
         "template_file": "template.yaml",
         "stage_params_file": "staging-config-test.json",
-        "accound_ids": ["moceked_account_id"],
+        "account_ids": ["mocked_account_id"],
         "org_ids": ["mocked_org_unit_id"],
         "regions": ["us-east-1"],
     }

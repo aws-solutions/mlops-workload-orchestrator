@@ -18,11 +18,7 @@ from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     create_ecr_repo_policy,
     model_package_group_policy,
 )
-from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_account_id_parameter,
-    create_org_id_parameter,
-    create_delegated_admin_parameter,
-)
+from lib.blueprints.byom.pipeline_definitions.templates_parameters import ParameteresFactory as pf
 
 
 def configure_multi_account_parameters_permissions(
@@ -34,7 +30,6 @@ def configure_multi_account_parameters_permissions(
     orchestrator_lambda_function,
     paramaters_list,
     paramaters_labels,
-    send_data_cr_properties,
 ):
     """
     configure_multi_account_parameters_permissions creates parameters and permissions for the multi-account option
@@ -47,25 +42,24 @@ def configure_multi_account_parameters_permissions(
     :orchestrator_lambda_function: orchestrator lambda function CDK object
     :paramaters_list: list parameters' logical ids
     :paramaters_labels: dictionary of paramaters labels
-    :send_data_cr_properties: custom resource properties (dictionary)
 
     :return: (paramaters_list, paramaters_labels, send_data_cr_properties)
     """
     # add parameters
     # delegated admin account
-    is_delegated_admin = create_delegated_admin_parameter(scope)
+    is_delegated_admin = pf.create_delegated_admin_parameter(scope)
     # create development parameters
     account_type = "development"
-    dev_account_id = create_account_id_parameter(scope, "DEV_ACCOUNT_ID", account_type)
-    dev_org_id = create_org_id_parameter(scope, "DEV_ORG_ID", account_type)
+    dev_account_id = pf.create_account_id_parameter(scope, "DevAccountId", account_type)
+    dev_org_id = pf.create_org_id_parameter(scope, "DevOrgId", account_type)
     # create staging parameters
     account_type = "staging"
-    staging_account_id = create_account_id_parameter(scope, "STAGING_ACCOUNT_ID", account_type)
-    staging_org_id = create_org_id_parameter(scope, "STAGING_ORG_ID", account_type)
+    staging_account_id = pf.create_account_id_parameter(scope, "StagingAccountId", account_type)
+    staging_org_id = pf.create_org_id_parameter(scope, "StagingOrgId", account_type)
     # create production parameters
     account_type = "production"
-    prod_account_id = create_account_id_parameter(scope, "PROD_ACCOUNT_ID", account_type)
-    prod_org_id = create_org_id_parameter(scope, "PROD_ORG_ID", account_type)
+    prod_account_id = pf.create_account_id_parameter(scope, "ProdAccountId", account_type)
+    prod_org_id = pf.create_org_id_parameter(scope, "ProdOrgId", account_type)
 
     principals = [
         iam.AccountPrincipal(dev_account_id.value_as_string),
@@ -73,7 +67,7 @@ def configure_multi_account_parameters_permissions(
         iam.AccountPrincipal(prod_account_id.value_as_string),
     ]
 
-    # add permission to access the assets bicket
+    # add permission to access the assets bucket
     assets_bucket.add_to_resource_policy(
         s3_policy_read(
             [assets_bucket.bucket_arn, f"{assets_bucket.bucket_arn}/*"],
@@ -89,7 +83,7 @@ def configure_multi_account_parameters_permissions(
         )
     )
 
-    # add permissios to other account to pull images
+    # add permissions to other account to pull images
     ecr_repo.add_to_resource_policy(create_ecr_repo_policy(principals))
 
     # give other accounts permissions to use the model registry
@@ -137,8 +131,5 @@ def configure_multi_account_parameters_permissions(
         }
     )
 
-    # add is_delegated_admin_account to the collected data
-    send_data_cr_properties.update({"IsDelegatedAccount": is_delegated_admin.value_as_string})
-
-    # return parameters, labels, and send_data_cr_properties
-    return (paramaters_list, paramaters_labels, send_data_cr_properties)
+    # return parameters, labels, and is_delegated_admin
+    return (paramaters_list, paramaters_labels, is_delegated_admin.value_as_string)

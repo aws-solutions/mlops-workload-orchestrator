@@ -32,17 +32,8 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_sns,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_notification_email_parameter,
-    create_template_zip_name_parameter,
-    create_template_file_name_parameter,
-    create_stage_params_file_name_parameter,
-    create_blueprint_bucket_name_parameter,
-    create_assets_bucket_name_parameter,
-    create_stack_name_parameter,
-    create_account_id_parameter,
-    create_org_id_parameter,
-    create_delegated_admin_parameter,
-    create_delegated_admin_condition,
+    ParameteresFactory as pf,
+    ConditionsFactory as cf,
 )
 
 
@@ -51,38 +42,40 @@ class MultiAccountCodePipelineStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        notification_email = create_notification_email_parameter(self)
-        template_zip_name = create_template_zip_name_parameter(self)
-        template_file_name = create_template_file_name_parameter(self)
-        dev_params_file_name = create_stage_params_file_name_parameter(self, "DEV_PARAMS_NAME", "development")
-        staging_params_file_name = create_stage_params_file_name_parameter(self, "STAGING_PARAMS_NAME", "staging")
-        prod_params_file_name = create_stage_params_file_name_parameter(self, "PROD_PARAMS_NAME", "production")
+        notification_email = pf.create_notification_email_parameter(self)
+        template_zip_name = pf.create_template_zip_name_parameter(self)
+        template_file_name = pf.create_template_file_name_parameter(self)
+        dev_params_file_name = pf.create_stage_params_file_name_parameter(self, "DevParamsName", "development")
+        staging_params_file_name = pf.create_stage_params_file_name_parameter(self, "StagingParamsName", "staging")
+        prod_params_file_name = pf.create_stage_params_file_name_parameter(self, "ProdParamsName", "production")
         # create development parameters
         account_type = "development"
-        dev_account_id = create_account_id_parameter(self, "DEV_ACCOUNT_ID", account_type)
-        dev_org_id = create_org_id_parameter(self, "DEV_ORG_ID", account_type)
+        dev_account_id = pf.create_account_id_parameter(self, "DevAccountId", account_type)
+        dev_org_id = pf.create_org_id_parameter(self, "DevOrgId", account_type)
         # create staging parameters
         account_type = "staging"
-        staging_account_id = create_account_id_parameter(self, "STAGING_ACCOUNT_ID", account_type)
-        staging_org_id = create_org_id_parameter(self, "STAGING_ORG_ID", account_type)
+        staging_account_id = pf.create_account_id_parameter(self, "StagingAccountId", account_type)
+        staging_org_id = pf.create_org_id_parameter(self, "StagingOrgId", account_type)
         # create production parameters
         account_type = "production"
-        prod_account_id = create_account_id_parameter(self, "PROD_ACCOUNT_ID", account_type)
-        prod_org_id = create_org_id_parameter(self, "PROD_ORG_ID", account_type)
+        prod_account_id = pf.create_account_id_parameter(self, "ProdAccountId", account_type)
+        prod_org_id = pf.create_org_id_parameter(self, "ProdOrgId", account_type)
         # assets parameters
-        blueprint_bucket_name = create_blueprint_bucket_name_parameter(self)
-        assets_bucket_name = create_assets_bucket_name_parameter(self)
-        stack_name = create_stack_name_parameter(self)
+        blueprint_bucket_name = pf.create_blueprint_bucket_name_parameter(self)
+        assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
+        stack_name = pf.create_stack_name_parameter(self)
         # delegated admin account
-        is_delegated_admin = create_delegated_admin_parameter(self)
+        is_delegated_admin = pf.create_delegated_admin_parameter(self)
         # create use delegated admin account condition
-        delegated_admin_account_condition = create_delegated_admin_condition(self, is_delegated_admin)
+        delegated_admin_account_condition = cf.create_delegated_admin_condition(self, is_delegated_admin)
 
         # Resources #
-        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket", assets_bucket_name.value_as_string)
+        assets_bucket = s3.Bucket.from_bucket_name(self, "ImportedAssetsBucket", assets_bucket_name.value_as_string)
 
         # getting blueprint bucket object from its name - will be used later in the stack
-        blueprint_bucket = s3.Bucket.from_bucket_name(self, "BlueprintBucket", blueprint_bucket_name.value_as_string)
+        blueprint_bucket = s3.Bucket.from_bucket_name(
+            self, "ImportedBlueprintBucket", blueprint_bucket_name.value_as_string
+        )
 
         # create sns topic and subscription
         pipeline_notification_topic = sns.Topic(

@@ -28,7 +28,7 @@
 set -e
 
 # Important: CDK global version number
-cdk_version=1.96.0
+cdk_version=1.117.0
 
 # Check to see if the required parameters have been provided:
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
@@ -111,23 +111,27 @@ echo "npm install -g aws-cdk@$cdk_version"
 npm install -g aws-cdk@$cdk_version
 
 #Run 'cdk synth for BYOM blueprints
-echo "cdk synth ModelMonitorStack > lib/blueprints/byom/byom_model_monitor.yaml"
-cdk synth ModelMonitorStack > lib/blueprints/byom/byom_model_monitor.yaml
-echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml"
-cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml
-echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml"
-cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml
-echo "cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml"
-cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml
-echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml"
-cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml
-echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml"
-cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml
+echo "cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false"
+cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false"
+cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false"
+cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false
+echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false
 
 # Replace %%VERSION%% in other templates
 replace="s/%%VERSION%%/$3/g"
-echo "sed -i -e $replace lib/blueprints/byom/byom_model_monitor.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_model_monitor.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_data_quality_monitor.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_data_quality_monitor.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_model_quality_monitor.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_model_quality_monitor.yaml
 echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml
 echo "sed -i -e $replace lib/blueprints/byom/single_account_codepipeline.yaml"
@@ -140,10 +144,10 @@ echo "sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml
 
 # Run 'cdk synth' for main templates to generate raw solution outputs
-echo "cdk synth aws-mlops-single-account-framework --output=$staging_dist_dir"
-cdk synth aws-mlops-single-account-framework --output=$staging_dist_dir
-echo "cdk synth aws-mlops-multi-account-framework --output=$staging_dist_dir"
-cdk synth aws-mlops-multi-account-framework --output=$staging_dist_dir
+echo "cdk synth aws-mlops-single-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir"
+cdk synth aws-mlops-single-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir
+echo "cdk synth aws-mlops-multi-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir"
+cdk synth aws-mlops-multi-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir
 
 # Remove unnecessary output files
 echo "cd $staging_dist_dir"

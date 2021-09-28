@@ -11,9 +11,9 @@
 #  and limitations under the License.                                                                                #
 ######################################################################################################################
 
-import unittest, requests
+import unittest
+import requests
 from unittest import mock
-import pytest
 from lambda_function import handler
 
 
@@ -23,20 +23,53 @@ def mocked_requests_post(*args, **kwargs):
             self.status_code = status_code
             self.reason = reason
 
+        def raise_for_status(self):
+            pass  # NOSONAR this is just used as a mocked response object
+
     return MockResponse(200, "OK")
 
 
 class LambdaTest(unittest.TestCase):
-    def test_create_unique_id(self):
+    exception_message = "Exception should not be raised when metrics cannot be sent"
+
+    def test_custom_resource(self):
         import lambda_function
 
+        # test resource == "UUID"
         event = {"RequestType": "Create", "ResourceProperties": {"Resource": "UUID"}}
 
         lambda_function.custom_resource(event, None)
         self.assertIsNotNone(lambda_function.helper.Data.get("UUID"))
 
+        # test resource == "AnonymousMetric"
+        with mock.patch("requests.post", side_effect=mocked_requests_post) as mock_post:
+            event = {
+                "RequestType": "Create",
+                "ResourceProperties": {
+                    "Resource": "AnonymousMetric",
+                    "SolutionId": "SO1234",
+                    "gitSelected": "True",
+                    "bucketSelected": "False",
+                    "IsMultiAccount": "True",
+                    "IsDelegatedAccount": "True",
+                    "UUID": "some-uuid",
+                },
+            }
+            lambda_function.custom_resource(event, None)
+            actual_payload = mock_post.call_args.kwargs["json"]
+            self.assertEqual(
+                actual_payload["Data"],
+                {
+                    "RequestType": "Create",
+                    "gitSelected": "True",
+                    "bucketSelected": "False",
+                    "IsMultiAccount": "True",
+                    "IsDelegatedAccount": "True",
+                },
+            )
+
     @mock.patch("requests.post", side_effect=mocked_requests_post)
-    def test_send_metrics_successful(self, mock_post):
+    def test_send_anonymous_metrics_successful(self, mock_post):
         event = {
             "RequestType": "Create",
             "ResourceProperties": {
@@ -49,9 +82,11 @@ class LambdaTest(unittest.TestCase):
             },
         }
 
-        from lambda_function import custom_resource
+        from lambda_function import _send_anonymous_metrics
 
-        custom_resource(event, None)
+        response = _send_anonymous_metrics(event["RequestType"], event["ResourceProperties"])
+
+        self.assertIsNotNone(response)
 
         expected_metrics_endpoint = "https://metrics.awssolutionsbuilder.com/generic"
         actual_metrics_endpoint = mock_post.call_args.args[0]
@@ -69,47 +104,69 @@ class LambdaTest(unittest.TestCase):
         self.assertIn("Data", actual_payload)
         self.assertEqual(
             actual_payload["Data"],
-            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "True", "bucketSelected": "False"},
+            {"RequestType": "Create", "gitSelected": "True", "bucketSelected": "False"},
         )
 
         # delete a key from the resource properties. It should send data with no errors
         del event["ResourceProperties"]["bucketSelected"]
-        custom_resource(event, None)
+        response = _send_anonymous_metrics(event["RequestType"], event["ResourceProperties"])
+        self.assertIsNotNone(response)
         actual_payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(
             actual_payload["Data"],
-            {"Foo": "Bar", "RequestType": "Create", "gitSelected": "True"},
+            {"RequestType": "Create", "gitSelected": "True"},
         )
 
-    @mock.patch("requests.post")
-    def test_send_metrics_connection_error(self, mock_post):
-        mock_post.side_effect = requests.exceptions.ConnectionError()
+    @mock.patch("requests.post", side_effect=mocked_requests_post(404, "HTTPError"))
+    def test_send_anonymous_metrics_http_error(self, mock_post):
+        event = {
+            "RequestType": "Create",
+            "ResourceProperties": {"Resource": "AnonymousMetric", "SolutionId": "SO1234", "UUID": "some-uuid"},
+        }
 
+        try:
+            from lambda_function import _send_anonymous_metrics
+
+            response = _send_anonymous_metrics(event["RequestType"], event["ResourceProperties"])
+            # the function shouldn't throw an exception, and return None
+            self.assertIsNone(response)
+
+        except AssertionError as e:
+            self.fail(str(e))
+
+    @mock.patch("requests.post", side_effect=mocked_requests_post)
+    def test_send_anonymous_metrics_connection_error(self, mock_post):
+        mock_post.side_effect = requests.exceptions.ConnectionError()
         event = {
             "RequestType": "Update",
             "ResourceProperties": {"Resource": "AnonymousMetric", "SolutionId": "SO1234", "UUID": "some-uuid"},
         }
 
         try:
-            from lambda_function import custom_resource
+            from lambda_function import _send_anonymous_metrics
 
-            custom_resource(event, None)
-        except:
-            self.fail("Exception should not be raised when metrics cannot be sent")
+            response = _send_anonymous_metrics(event["RequestType"], event["ResourceProperties"])
+            # the function shouldn't throw an exception, and return None
+            self.assertIsNone(response)
+
+        except AssertionError as e:
+            self.fail(str(e))
 
     @mock.patch("requests.post")
-    def test_send_metrics_other_error(self, mock_post):
+    def test_send_anonymous_metrics_other_error(self, mock_post):
         try:
             invalid_event = {
                 "RequestType": "Delete",
                 "ResourceProperties": {"Resource": "AnonymousMetric", "UUID": "some-uuid"},
             }
 
-            from lambda_function import custom_resource
+            from lambda_function import _send_anonymous_metrics
 
-            custom_resource(invalid_event, None)
-        except:
-            self.fail("Exception should not be raised when metrics cannot be sent")
+            response = _send_anonymous_metrics(invalid_event["RequestType"], invalid_event["ResourceProperties"])
+            # the function shouldn't throw an exception, and return None
+            assert response is None
+        except AssertionError as e:
+            self.fail(str(e))
 
     def test_sanitize_data(self):
         from lambda_function import _sanitize_data
@@ -120,10 +177,16 @@ class LambdaTest(unittest.TestCase):
             "SolutionId": "SO1234",
             "UUID": "some-uuid",
             "Region": "us-east-1",
+            "gitSelected": "True",
+            "bucketSelected": "False",
             "Foo": "Bar",
         }
 
-        expected_response = {"Region": "us-east-1", "Foo": "Bar"}
+        expected_response = {
+            "Region": "us-east-1",
+            "gitSelected": "True",
+            "bucketSelected": "False",
+        }
 
         actual_response = _sanitize_data(resource_properties)
         self.assertCountEqual(expected_response, actual_response)

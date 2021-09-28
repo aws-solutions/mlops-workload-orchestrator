@@ -51,40 +51,55 @@ def mock_env_variables():
 
 @pytest.fixture
 def api_byom_event():
-    def _api_byom_event(pipeline_type, is_multi=False):
+    def _api_byom_event(pipeline_type, is_multi=False, endpint_name_provided=False):
+        #  create a map {<attribute_name>: {is_multi (True/False): <parameter-value>}}
+        maping = dict(
+            inference_instance={
+                "True": {
+                    "dev": os.environ["INSTANCETYPE"],
+                    "staging": os.environ["INSTANCETYPE"],
+                    "prod": os.environ["INSTANCETYPE"],
+                },
+                "False": os.environ["INSTANCETYPE"],
+            },
+            batch_job_output_location={
+                "True": {"dev": "bucket/dev_output", "staging": "bucket/staging_output", "prod": "bucket/prod_output"},
+                "False": os.environ["BATCHOUTPUT"],
+            },
+            data_capture_location={
+                "True": {
+                    "dev": "bucket/dev_datacapture",
+                    "staging": "bucket/staging_datacapture",
+                    "prod": "bucket/prod_datacapture",
+                },
+                "False": os.environ["DATACAPTURE"],
+            },
+            endpoint_name={
+                "True": {
+                    "dev": "dev-endpoint",
+                    "staging": "staging-endpoint",
+                    "prod": "prod-endpoint",
+                },
+                "False": "test-endpoint",
+            },
+        )
         event = {
             "pipeline_type": pipeline_type,
             "model_name": "testmodel",
             "model_artifact_location": os.environ["MODELARTIFACTLOCATION"],
             "model_package_name": os.environ["MODEL_PACKAGE_NAME"],
         }
-        if is_multi:
-            event["inference_instance"] = {
-                "dev": os.environ["INSTANCETYPE"],
-                "staging": os.environ["INSTANCETYPE"],
-                "prod": os.environ["INSTANCETYPE"],
-            }
-        else:
-            event["inference_instance"] = os.environ["INSTANCETYPE"]
+        event["inference_instance"] = maping["inference_instance"][str(is_multi)]
+
         if pipeline_type in ["byom_batch_builtin", "byom_batch_custom"]:
             event["batch_inference_data"] = os.environ["INFERENCEDATA"]
-            if is_multi:
-                event["batch_job_output_location"] = {
-                    "dev": "bucket/dev_output",
-                    "staging": "bucket/staging_output",
-                    "prod": "bucket/prod_output",
-                }
-            else:
-                event["batch_job_output_location"] = os.environ["BATCHOUTPUT"]
+            event["batch_job_output_location"] = maping["batch_job_output_location"][str(is_multi)]
+
         if pipeline_type in ["byom_realtime_builtin", "byom_realtime_custom"]:
-            if is_multi:
-                event["data_capture_location"] = {
-                    "dev": "bucket/dev_datacapture",
-                    "staging": "bucket/staging_datacapture",
-                    "prod": "bucket/prod_datacapture",
-                }
-            else:
-                event["data_capture_location"] = os.environ["DATACAPTURE"]
+            event["data_capture_location"] = maping["data_capture_location"][str(is_multi)]
+            # add optional endpoint_name
+            if endpint_name_provided:
+                event["endpoint_name"] = maping["endpoint_name"][str(is_multi)]
 
         if pipeline_type in ["byom_realtime_builtin", "byom_batch_builtin"]:
             event["model_framework"] = "xgboost"
@@ -98,20 +113,37 @@ def api_byom_event():
 
 
 @pytest.fixture
-def api_monitor_event():
+def api_data_quality_event():
     return {
-        "pipeline_type": "byom_model_monitor",
+        "pipeline_type": "byom_data_quality_monitor",
         "model_name": "testmodel",
         "endpoint_name": "test_endpoint",
-        "training_data": os.environ["TRAININGDATA"],
+        "baseline_data": os.environ["TRAININGDATA"],
         "baseline_job_output_location": os.environ["BASELINEOUTPUT"],
         "monitoring_output_location": "testbucket/model_monitor/monitor_output",
         "data_capture_location": "testbucket/xgboost/datacapture",
         "schedule_expression": os.environ["SCHEDULEEXP"],
         "instance_type": os.environ["INSTANCETYPE"],
         "instance_volume_size": "20",
-        "max_runtime_seconds": "3600",
+        "baseline_max_runtime_seconds": "3600",
+        "monitor_max_runtime_seconds": "1800",
     }
+
+
+@pytest.fixture
+def api_model_quality_event(api_data_quality_event):
+    model_quality_event = api_data_quality_event.copy()
+    model_quality_event.update(
+        {
+            "pipeline_type": "byom_model_quality_monitor",
+            "baseline_inference_attribute": "0",
+            "problem_type": "Regression",
+            "baseline_ground_truth_attribute": "label",
+            "monitor_inference_attribute": "0",
+            "monitor_ground_truth_input": "s3://test-bucket/groundtruth",
+        }
+    )
+    return model_quality_event
 
 
 @pytest.fixture
@@ -126,80 +158,111 @@ def api_image_builder_event():
 
 @pytest.fixture
 def expected_params_realtime_custom():
+    def _expected_params_realtime_custom(endpoint_name_provided=False):
+        endpoint_name = "test-endpoint" if endpoint_name_provided else ""
+        expected_params = [
+            ("AssetsBucket", "testassetsbucket"),
+            ("KmsKeyArn", ""),
+            ("BlueprintBucket", "testbucket"),
+            ("ModelName", "testmodel"),
+            ("ModelArtifactLocation", os.environ["MODELARTIFACTLOCATION"]),
+            ("InferenceInstance", os.environ["INSTANCETYPE"]),
+            ("CustomAlgorithmsECRRepoArn", "test-ecr-repo"),
+            ("ImageUri", "custom-image-uri"),
+            ("ModelPackageGroupName", ""),
+            ("ModelPackageName", os.environ["MODEL_PACKAGE_NAME"]),
+            ("DataCaptureLocation", os.environ["DATACAPTURE"]),
+            ("EndpointName", endpoint_name),
+        ]
+
+        return expected_params
+
+    return _expected_params_realtime_custom
+
+
+@pytest.fixture
+def expected_data_quality_monitor_params():
     return [
-        ("ASSETSBUCKET", "testassetsbucket"),
-        ("KMSKEYARN", ""),
-        ("BLUEPRINTBUCKET", "testbucket"),
-        ("MODELNAME", "testmodel"),
-        ("MODELARTIFACTLOCATION", os.environ["MODELARTIFACTLOCATION"]),
-        ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
-        ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
-        ("IMAGEURI", "custom-image-uri"),
-        ("MODELPACKAGEGROUPNAME", ""),
-        ("MODELPACKAGENAME", os.environ["MODEL_PACKAGE_NAME"]),
-        ("DATACAPTURELOCATION", os.environ["DATACAPTURE"]),
+        ("BaselineJobName", "test_endpoint-baseline-job-ec3a"),
+        ("BaselineOutputBucket", "testbucket"),
+        ("BaselineJobOutputLocation", os.environ["BASELINEOUTPUT"]),
+        ("DataCaptureBucket", "testbucket"),
+        ("DataCaptureLocation", os.environ["BASELINEOUTPUT"]),
+        ("EndpointName", "test_endpoint"),
+        ("ImageUri", "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer"),
+        ("InstanceType", os.environ["INSTANCETYPE"]),
+        ("InstanceVolumeSize", "20"),
+        ("BaselineMaxRuntimeSeconds", "3600"),
+        ("MonitorMaxRuntimeSeconds", "1800"),
+        ("MonitoringOutputLocation", "testbucket/model_monitor/monitor_output"),
+        ("MonitoringScheduleName", "test_endpoint-monitor-2a87"),
+        ("ScheduleExpression", os.environ["SCHEDULEEXP"]),
+        ("BaselineData", os.environ["TRAININGDATA"]),
     ]
 
 
 @pytest.fixture
-def expected_model_monitor_params():
-    return [
-        ("BASELINEJOBNAME", "test_endpoint-baseline-job-ec3a"),
-        ("BASELINEOUTPUTBUCKET", "testbucket"),
-        ("BASELINEJOBOUTPUTLOCATION", os.environ["BASELINEOUTPUT"]),
-        ("DATACAPTUREBUCKET", "testbucket"),
-        ("DATACAPTURELOCATION", os.environ["BASELINEOUTPUT"]),
-        ("ENDPOINTNAME", "test_endpoint"),
-        ("IMAGEURI", "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer:latest"),
-        ("INSTANCETYPE", os.environ["INSTANCETYPE"]),
-        ("INSTANCEVOLUMESIZE", "20"),
-        ("MAXRUNTIMESECONDS", "3600"),
-        ("MONITORINGOUTPUTLOCATION", "testbucket/model_monitor/monitor_output"),
-        ("MONITORINGSCHEDULENAME", "test_endpoint-monitor-2a87"),
-        ("MONITORINGTYPE", "dataquality"),
-        ("SCHEDULEEXPRESSION", os.environ["SCHEDULEEXP"]),
-        ("TRAININGDATA", os.environ["TRAININGDATA"]),
-    ]
+def expected_model_quality_monitor_params(expected_data_quality_monitor_params):
+    expected_model_quality = expected_data_quality_monitor_params.copy()
+
+    expected_model_quality.extend(
+        [
+            ("BaselineInferenceAttribute", "prediction"),
+            ("BaselineProbabilityAttribute", "probability"),
+            ("BaselineGroundTruthAttribute", "label"),
+            ("ProblemType", "Regression"),
+            ("MonitorInferenceAttribute", "0"),
+            ("MonitorProbabilityAttribute", "0"),
+            ("ProbabilityThresholdAttribute", "0.5"),
+            ("MonitorGroundTruthInput", "s3://test-bucket/groundtruth"),
+        ]
+    )
+
+    return expected_model_quality
 
 
 @pytest.fixture
 def expected_common_realtime_batch_params():
     return [
-        ("MODELNAME", "testmodel"),
-        ("MODELARTIFACTLOCATION", os.environ["MODELARTIFACTLOCATION"]),
-        ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
-        ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
-        ("IMAGEURI", "custom-image-uri"),
-        ("MODELPACKAGEGROUPNAME", ""),
-        ("MODELPACKAGENAME", os.environ["MODEL_PACKAGE_NAME"]),
+        ("ModelName", "testmodel"),
+        ("ModelArtifactLocation", os.environ["MODELARTIFACTLOCATION"]),
+        ("InferenceInstance", os.environ["INSTANCETYPE"]),
+        ("CustomAlgorithmsECRRepoArn", "test-ecr-repo"),
+        ("ImageUri", "custom-image-uri"),
+        ("ModelPackageGroupName", ""),
+        ("ModelPackageName", os.environ["MODEL_PACKAGE_NAME"]),
     ]
 
 
 @pytest.fixture
 def expected_image_builder_params():
     return [
-        ("NOTIFICATIONEMAIL", os.environ["NOTIFICATION_EMAIL"]),
-        ("ASSETSBUCKET", "testassetsbucket"),
-        ("CUSTOMCONTAINER", os.environ["CUSTOMIMAGE"]),
-        ("ECRREPONAME", "mlops-ecrrep"),
-        ("IMAGETAG", "tree"),
+        ("NotificationEmail", os.environ["NOTIFICATION_EMAIL"]),
+        ("AssetsBucket", "testassetsbucket"),
+        ("CustomImage", os.environ["CUSTOMIMAGE"]),
+        ("ECRRepoName", "mlops-ecrrep"),
+        ("ImageTag", "tree"),
     ]
 
 
 @pytest.fixture
 def expected_realtime_specific_params():
-    return [("DATACAPTURELOCATION", os.environ["DATACAPTURE"])]
+    def _expected_realtime_specific_params(endpoint_name_provided=False):
+        endpoint_name = "test-endpoint" if endpoint_name_provided else ""
+        return [("DataCaptureLocation", os.environ["DATACAPTURE"]), ("EndpointName", endpoint_name)]
+
+    return _expected_realtime_specific_params
 
 
 @pytest.fixture
 def expect_single_account_params_format():
     return {
         "Parameters": {
-            "NOTIFICATIONEMAIL": os.environ["NOTIFICATION_EMAIL"],
-            "ASSETSBUCKET": "testassetsbucket",
-            "CUSTOMCONTAINER": os.environ["CUSTOMIMAGE"],
-            "ECRREPONAME": "mlops-ecrrep",
-            "IMAGETAG": "tree",
+            "NotificationEmail": os.environ["NOTIFICATION_EMAIL"],
+            "AssetsBucket": "testassetsbucket",
+            "CustomImage": os.environ["CUSTOMIMAGE"],
+            "ECRRepoName": "mlops-ecrrep",
+            "ImageTag": "tree",
         }
     }
 
@@ -212,39 +275,39 @@ def stack_name():
 @pytest.fixture
 def expected_multi_account_params_format():
     return [
-        {"ParameterKey": "NOTIFICATIONEMAIL", "ParameterValue": os.environ["NOTIFICATION_EMAIL"]},
-        {"ParameterKey": "ASSETSBUCKET", "ParameterValue": "testassetsbucket"},
-        {"ParameterKey": "CUSTOMCONTAINER", "ParameterValue": os.environ["CUSTOMIMAGE"]},
-        {"ParameterKey": "ECRREPONAME", "ParameterValue": "mlops-ecrrep"},
-        {"ParameterKey": "IMAGETAG", "ParameterValue": "tree"},
+        {"ParameterKey": "NotificationEmail", "ParameterValue": os.environ["NOTIFICATION_EMAIL"]},
+        {"ParameterKey": "AssetsBucket", "ParameterValue": "testassetsbucket"},
+        {"ParameterKey": "CustomImage", "ParameterValue": os.environ["CUSTOMIMAGE"]},
+        {"ParameterKey": "ECRRepoName", "ParameterValue": "mlops-ecrrep"},
+        {"ParameterKey": "ImageTag", "ParameterValue": "tree"},
     ]
 
 
 @pytest.fixture
 def expected_batch_specific_params():
     return [
-        ("BATCHINPUTBUCKET", "inference"),
-        ("BATCHINFERENCEDATA", os.environ["INFERENCEDATA"]),
-        ("BATCHOUTPUTLOCATION", os.environ["BATCHOUTPUT"]),
+        ("BatchInputBucket", "inference"),
+        ("BatchInferenceData", os.environ["INFERENCEDATA"]),
+        ("BatchOutputLocation", os.environ["BATCHOUTPUT"]),
     ]
 
 
 @pytest.fixture
 def expected_batch_params():
     return [
-        ("ASSETSBUCKET", "testassetsbucket"),
-        ("KMSKEYARN", ""),
-        ("BLUEPRINTBUCKET", "testbucket"),
-        ("MODELNAME", "testmodel"),
-        ("MODELARTIFACTLOCATION", os.environ["MODELARTIFACTLOCATION"]),
-        ("INFERENCEINSTANCE", os.environ["INSTANCETYPE"]),
-        ("CUSTOMALGORITHMSECRREPOARN", "test-ecr-repo"),
-        ("IMAGEURI", "custom-image-uri"),
-        ("MODELPACKAGEGROUPNAME", ""),
-        ("MODELPACKAGENAME", os.environ["MODEL_PACKAGE_NAME"]),
-        ("BATCHINPUTBUCKET", "inference"),
-        ("BATCHINFERENCEDATA", os.environ["INFERENCEDATA"]),
-        ("BATCHOUTPUTLOCATION", os.environ["BATCHOUTPUT"]),
+        ("AssetsBucket", "testassetsbucket"),
+        ("KmsKeyArn", ""),
+        ("BlueprintBucket", "testbucket"),
+        ("ModelName", "testmodel"),
+        ("ModelArtifactLocation", os.environ["MODELARTIFACTLOCATION"]),
+        ("InferenceInstance", os.environ["INSTANCETYPE"]),
+        ("CustomAlgorithmsECRRepoArn", "test-ecr-repo"),
+        ("ImageUri", "custom-image-uri"),
+        ("ModelPackageGroupName", ""),
+        ("ModelPackageName", os.environ["MODEL_PACKAGE_NAME"]),
+        ("BatchInputBucket", "inference"),
+        ("BatchInferenceData", os.environ["INFERENCEDATA"]),
+        ("BatchOutputLocation", os.environ["BATCHOUTPUT"]),
     ]
 
 
@@ -349,28 +412,42 @@ def api_model_monitor_event():
 
 @pytest.fixture
 def required_api_keys_model_monitor():
-    def _required_api_keys_model_monitor(default=True):
-        default_keys = [
+    def _required_api_keys_model_monitor(monitoring_type, problem_type=None):
+        common_keys = [
             "pipeline_type",
             "model_name",
             "endpoint_name",
+            "baseline_data",
             "baseline_job_output_location",
+            "data_capture_location",
             "monitoring_output_location",
             "schedule_expression",
-            "training_data",
+            "monitor_max_runtime_seconds",
             "instance_type",
-            "data_capture_location",
             "instance_volume_size",
         ]
-        if default:
-            return default_keys
+        if monitoring_type != "ModelQuality":
+            return common_keys
         else:
-            return default_keys + [
-                "features_attribute",
-                "inference_attribute",
-                "probability_attribute",
-                "probability_threshold_attribute",
+            common_model_keys = [
+                "baseline_inference_attribute",
+                "baseline_ground_truth_attribute",
+                "problem_type",
+                "monitor_ground_truth_input",
             ]
+            if problem_type in ["Regression", "MulticlassClassification"]:
+                common_model_keys.append("monitor_inference_attribute")
+
+            # BinaryClassification problem
+            else:
+                common_model_keys.extend(
+                    [
+                        "monitor_probability_attribute",
+                        "probability_threshold_attribute",
+                        "baseline_probability_attribute",
+                    ]
+                )
+            return [*common_keys, *common_model_keys]
 
     return _required_api_keys_model_monitor
 
@@ -613,5 +690,5 @@ def cf_client_params(api_byom_event, template_parameters_realtime_builtin):
 
 
 @pytest.fixture
-def expcted_update_response(stack_name):
+def expected_update_response(stack_name):
     return {"StackId": f"Pipeline {stack_name} is already provisioned. No updates are to be performed."}

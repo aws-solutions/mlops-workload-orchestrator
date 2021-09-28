@@ -5,12 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2021-09-28
+
+### Added
+
+- A new pipeline to deploy [AWS SageMaker Model Quality Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-model-quality.html). The new pipeline monitors the performance of a deployed model by comparing the
+  predictions that the model makes with the actual ground truth labels that the model attempts to predict.
+
+### Updated
+
+- The Model Monitor pipeline's API call. Now, the Model Monitor pipeline is split into two pipelines, Data Quality Monitor pipeline, and Model Quality Monitor pipeline.
+- The format of CloudFormation templates parameters' names from `PARAMETERNAME` to `ParameterName`.
+- The APIs of the Realtime Inference pipeline to support passing an optional custom endpoint name.
+- The data quality baseline's Lambda to use AWS SageMaker SDK to create the baseline, instead of using Boto3.
+- AWS Cloud Development Kit (AWS CDK) and AWS Solutions Constructs to version 1.117.0.
+
 ## [1.3.0] - 2021-06-24
 
 ### Added
 
 - The option to use [Amazon SageMaker Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html) to deploy versioned models. The model registry allows you to catalog models for production, manage model versions, associate metadata with models, manage the approval status of a model, deploy models to production, and automate model deployment with CI/CD.
-- The option to use an [AWS Organizations delegated administrator account](https://docs.amazonaws.cn/en_us/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html) to orchestrate the deployment of Machine Learning (ML) workloads across the AWS Organizations accounts using AWS CloudFormation StackSets.
+- The option to use an [AWS Organizations delegated administrator account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html) to orchestrate the deployment of Machine Learning (ML) workloads across the AWS Organizations accounts using AWS CloudFormation StackSets.
 
 ### Updated
 

@@ -56,26 +56,38 @@ BYOMCustomAlgorithmImageBuilderStack(
 batch_stack = BYOMBatchStack(
     app,
     "BYOMBatchStack",
-    description=(
-        f"({solution_id}byom-bt) - BYOM Batch Transform pipeline" f"in AWS MLOps Framework. Version {version}"
-    ),
+    description=(f"({solution_id}byom-bt) - BYOM Batch Transform pipeline in AWS MLOps Framework. Version {version}"),
 )
 
 core.Aspects.of(batch_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentBatch", solution_id, version))
 
-model_monitor_stack = ModelMonitorStack(
+data_quality_monitor_stack = ModelMonitorStack(
     app,
-    "ModelMonitorStack",
-    description=(f"({solution_id}byom-mm) - Model Monitor pipeline. Version {version}"),
+    "DataQualityModelMonitorStack",
+    monitoring_type="DataQuality",
+    description=(f"({solution_id}byom-dqmm) - DataQuality Model Monitor pipeline. Version {version}"),
 )
 
-core.Aspects.of(model_monitor_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentMonitor", solution_id, version))
+core.Aspects.of(data_quality_monitor_stack).add(
+    AwsSDKConfigAspect(app, "SDKUserAgentDataMonitor", solution_id, version)
+)
+
+model_quality_monitor_stack = ModelMonitorStack(
+    app,
+    "ModelQualityModelMonitorStack",
+    monitoring_type="ModelQuality",
+    description=(f"({solution_id}byom-mqmm) - ModelQuality Model Monitor pipeline. Version {version}"),
+)
+
+core.Aspects.of(model_quality_monitor_stack).add(
+    AwsSDKConfigAspect(app, "SDKUserAgentModelMonitor", solution_id, version)
+)
 
 
 realtime_stack = BYOMRealtimePipelineStack(
     app,
     "BYOMRealtimePipelineStack",
-    description=(f"({solution_id}byom-rip) - BYOM Realtime Inference Pipleline. Version {version}"),
+    description=(f"({solution_id}byom-rip) - BYOM Realtime Inference Pipeline. Version {version}"),
 )
 
 core.Aspects.of(realtime_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentRealtime", solution_id, version))
