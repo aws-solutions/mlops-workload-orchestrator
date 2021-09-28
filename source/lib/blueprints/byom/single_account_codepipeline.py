@@ -29,14 +29,7 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_sns,
     suppress_cloudformation_action,
 )
-from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_notification_email_parameter,
-    create_template_zip_name_parameter,
-    create_template_file_name_parameter,
-    create_stage_params_file_name_parameter,
-    create_assets_bucket_name_parameter,
-    create_stack_name_parameter,
-)
+from lib.blueprints.byom.pipeline_definitions.templates_parameters import ParameteresFactory as pf
 
 
 class SingleAccountCodePipelineStack(core.Stack):
@@ -44,15 +37,15 @@ class SingleAccountCodePipelineStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        notification_email = create_notification_email_parameter(self)
-        template_zip_name = create_template_zip_name_parameter(self)
-        template_file_name = create_template_file_name_parameter(self)
-        template_params_file_name = create_stage_params_file_name_parameter(self, "TEMPLATE_PARAMS_NAME", "main")
-        assets_bucket_name = create_assets_bucket_name_parameter(self)
-        stack_name = create_stack_name_parameter(self)
+        notification_email = pf.create_notification_email_parameter(self)
+        template_zip_name = pf.create_template_zip_name_parameter(self)
+        template_file_name = pf.create_template_file_name_parameter(self)
+        template_params_file_name = pf.create_stage_params_file_name_parameter(self, "TemplateParamsName", "main")
+        assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
+        stack_name = pf.create_stack_name_parameter(self)
 
         # Resources #
-        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket", assets_bucket_name.value_as_string)
+        assets_bucket = s3.Bucket.from_bucket_name(self, "ImportedAssetsBucket", assets_bucket_name.value_as_string)
 
         # create sns topic and subscription
         pipeline_notification_topic = sns.Topic(
@@ -119,7 +112,7 @@ class SingleAccountCodePipelineStack(core.Stack):
             )
         )
 
-        # add cfn supressions
+        # add cfn suppressions
         pipeline_child_nodes = single_account_pipeline.node.find_all()
         pipeline_child_nodes[1].node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
         pipeline_child_nodes[6].node.default_child.cfn_options.metadata = suppress_iam_complex()

@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -22,22 +22,8 @@ from lib.blueprints.byom.pipeline_definitions.deploy_actions import (
 from lib.blueprints.byom.pipeline_definitions.sagemaker_role import create_sagemaker_role
 from lib.blueprints.byom.pipeline_definitions.sagemaker_model import create_sagemaker_model
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_blueprint_bucket_name_parameter,
-    create_assets_bucket_name_parameter,
-    create_algorithm_image_uri_parameter,
-    create_batch_input_bucket_name_parameter,
-    create_batch_inference_data_parameter,
-    create_batch_job_output_location_parameter,
-    create_custom_algorithms_ecr_repo_arn_parameter,
-    create_inference_instance_parameter,
-    create_kms_key_arn_parameter,
-    create_model_artifact_location_parameter,
-    create_model_name_parameter,
-    create_custom_algorithms_ecr_repo_arn_provided_condition,
-    create_kms_key_arn_provided_condition,
-    create_model_package_name_parameter,
-    create_model_registry_provided_condition,
-    create_model_package_group_name_parameter,
+    ParameteresFactory as pf,
+    ConditionsFactory as cf,
 )
 
 
@@ -46,31 +32,33 @@ class BYOMBatchStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        blueprint_bucket_name = create_blueprint_bucket_name_parameter(self)
-        assets_bucket_name = create_assets_bucket_name_parameter(self)
-        custom_algorithms_ecr_repo_arn = create_custom_algorithms_ecr_repo_arn_parameter(self)
-        kms_key_arn = create_kms_key_arn_parameter(self)
-        algorithm_image_uri = create_algorithm_image_uri_parameter(self)
-        model_name = create_model_name_parameter(self)
-        model_artifact_location = create_model_artifact_location_parameter(self)
-        inference_instance = create_inference_instance_parameter(self)
-        batch_input_bucket = create_batch_input_bucket_name_parameter(self)
-        batch_inference_data = create_batch_inference_data_parameter(self)
-        batch_job_output_location = create_batch_job_output_location_parameter(self)
-        model_package_group_name = create_model_package_group_name_parameter(self)
-        model_package_name = create_model_package_name_parameter(self)
+        blueprint_bucket_name = pf.create_blueprint_bucket_name_parameter(self)
+        assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
+        custom_algorithms_ecr_repo_arn = pf.create_custom_algorithms_ecr_repo_arn_parameter(self)
+        kms_key_arn = pf.create_kms_key_arn_parameter(self)
+        algorithm_image_uri = pf.create_algorithm_image_uri_parameter(self)
+        model_name = pf.create_model_name_parameter(self)
+        model_artifact_location = pf.create_model_artifact_location_parameter(self)
+        inference_instance = pf.create_inference_instance_parameter(self)
+        batch_input_bucket = pf.create_batch_input_bucket_name_parameter(self)
+        batch_inference_data = pf.create_batch_inference_data_parameter(self)
+        batch_job_output_location = pf.create_batch_job_output_location_parameter(self)
+        model_package_group_name = pf.create_model_package_group_name_parameter(self)
+        model_package_name = pf.create_model_package_name_parameter(self)
 
         # Conditions
-        custom_algorithms_ecr_repo_arn_provided = create_custom_algorithms_ecr_repo_arn_provided_condition(
+        custom_algorithms_ecr_repo_arn_provided = cf.create_custom_algorithms_ecr_repo_arn_provided_condition(
             self, custom_algorithms_ecr_repo_arn
         )
-        kms_key_arn_provided = create_kms_key_arn_provided_condition(self, kms_key_arn)
-        model_registry_provided = create_model_registry_provided_condition(self, model_package_name)
+        kms_key_arn_provided = cf.create_kms_key_arn_provided_condition(self, kms_key_arn)
+        model_registry_provided = cf.create_model_registry_provided_condition(self, model_package_name)
 
         # Resources #
-        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket", assets_bucket_name.value_as_string)
+        assets_bucket = s3.Bucket.from_bucket_name(self, "ImportedAssetsBucket", assets_bucket_name.value_as_string)
         # getting blueprint bucket object from its name - will be used later in the stack
-        blueprint_bucket = s3.Bucket.from_bucket_name(self, "BlueprintBucket", blueprint_bucket_name.value_as_string)
+        blueprint_bucket = s3.Bucket.from_bucket_name(
+            self, "ImportedBlueprintBucket", blueprint_bucket_name.value_as_string
+        )
 
         sm_layer = sagemaker_layer(self, blueprint_bucket)
         # creating a sagemaker model
@@ -147,7 +135,7 @@ class BYOMBatchStack(core.Stack):
 
         core.CfnOutput(
             self,
-            id="ModelName",
+            id="SageMakerModelName",
             value=sagemaker_model.attr_model_name,
             description="The name of the SageMaker model used by the batch transform job",
         )

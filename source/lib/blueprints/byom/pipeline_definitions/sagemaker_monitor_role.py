@@ -18,7 +18,7 @@ from lib.conditional_resource import ConditionalResources
 
 from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     kms_policy_document,
-    sagemaker_monitor_policiy_statement,
+    sagemaker_monitor_policy_statement,
     sagemaker_tags_policy_statement,
     sagemaker_logs_metrics_policy_document,
     s3_policy_read,
@@ -40,9 +40,11 @@ def create_sagemaker_monitor_role(
     output_s3_location,
     kms_key_arn_provided_condition,
     baseline_job_name,
-    monitoring_schedual_name,
+    monitoring_schedule_name,
+    endpoint_name,
+    model_monitor_ground_truth_input,
 ):
-    # create optional polocies
+    # create optional policies
     kms_policy = kms_policy_document(scope, "MLOpsKmsPolicy", kms_key_arn)
 
     # add conditions to KMS and ECR policies
@@ -52,27 +54,32 @@ def create_sagemaker_monitor_role(
     role = iam.Role(scope, id, assumed_by=iam.ServicePrincipal("sagemaker.amazonaws.com"))
 
     # permissions to create sagemaker resources
-    sagemaker_policy = sagemaker_monitor_policiy_statement(baseline_job_name, monitoring_schedual_name)
+    sagemaker_policy = sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_name, endpoint_name)
 
     # sagemaker tags permissions
     sagemaker_tags_policy = sagemaker_tags_policy_statement()
     # logs/metrics permissions
     logs_metrics_policy = sagemaker_logs_metrics_policy_document(scope, "SagemakerLogsMetricsPolicy")
     # S3 permissions
-    s3_read = s3_policy_read(
-        list(
-            set(
-                [
-                    f"arn:aws:s3:::{assets_bucket_name}",
-                    f"arn:aws:s3:::{assets_bucket_name}/*",
-                    f"arn:aws:s3:::{data_capture_bucket}",
-                    f"arn:aws:s3:::{data_capture_s3_location}/*",
-                    f"arn:aws:s3:::{baseline_output_bucket}",
-                    f"arn:aws:s3:::{baseline_job_output_location}/*",
-                ]
-            )
+    s3_read_resources = list(
+        set(  # set is used since a same bucket can be used more than once
+            [
+                f"arn:aws:s3:::{assets_bucket_name}",
+                f"arn:aws:s3:::{assets_bucket_name}/*",
+                f"arn:aws:s3:::{data_capture_bucket}",
+                f"arn:aws:s3:::{data_capture_s3_location}/*",
+                f"arn:aws:s3:::{baseline_output_bucket}",
+                f"arn:aws:s3:::{baseline_job_output_location}/*",
+            ]
         )
     )
+
+    # add permissions to read ground truth data (only for ModelQuality monitor)
+    if model_monitor_ground_truth_input:
+        s3_read_resources.extend(
+            [f"arn:aws:s3:::{model_monitor_ground_truth_input}", f"arn:aws:s3:::{model_monitor_ground_truth_input}/*"]
+        )
+    s3_read = s3_policy_read(s3_read_resources)
     s3_write = s3_policy_write(
         [
             f"arn:aws:s3:::{output_s3_location}/*",
@@ -83,7 +90,7 @@ def create_sagemaker_monitor_role(
     # IAM GetRole permission
     get_role_policy = get_role_policy_statement(role)
 
-    # add policy statments
+    # add policy statements
     role.add_to_policy(sagemaker_policy)
     role.add_to_policy(sagemaker_tags_policy)
     role.add_to_policy(s3_read)

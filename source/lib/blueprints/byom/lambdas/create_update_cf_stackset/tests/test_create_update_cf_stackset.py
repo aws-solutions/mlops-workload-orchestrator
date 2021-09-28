@@ -297,7 +297,7 @@ def test_check_stackset_update_status(
     )
     # assert the put_job_success is called
     mocked_put_job_success.assert_called_once()
-    # assert it was called with the exoected arguments
+    # assert it was called with the expected arguments
     mocked_put_job_success.assert_called_with(mocked_job_id, "StackSet and its instance update complete", None)
 
     # Case 2: asserting for the second branch status in ["RUNNING","PENDING"]:
@@ -311,7 +311,7 @@ def test_check_stackset_update_status(
     )
     # assert the put_job_continuation is called
     mocked_put_job_continuation.assert_called_once()
-    # assert it was called with the exoected arguments
+    # assert it was called with the expected arguments
     mocked_put_job_continuation.assert_called_with(mocked_job_id, "StackSet update still in progress", None)
 
     # Case 3: asserting for the last branch status not one of ["RUNNING","PENDING", "SUCCEEDED"]:
@@ -325,7 +325,7 @@ def test_check_stackset_update_status(
     )
     # assert the put_job_continuation is called
     mocked_put_job_failure.assert_called_once()
-    # assert it was called with the exoected arguments
+    # assert it was called with the expected arguments
     mocked_put_job_failure.assert_called_with(mocked_job_id, "Update failed: FAILED", None)
 
 

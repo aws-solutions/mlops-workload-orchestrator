@@ -46,7 +46,7 @@ def invoke_lambda(event, _, lm_client=lambda_client):
             return resource_id
 
         else:
-            raise Exception(f"The Resource {resource} is unsupported by the Invoke Lambda custom resource.")
+            raise ValueError(f"The Resource {resource} is unsupported by the Invoke Lambda custom resource.")
 
     except Exception as e:
         logger.error(f"Custom resource failed: {str(e)}")

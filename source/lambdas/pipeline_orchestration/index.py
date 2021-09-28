@@ -14,6 +14,8 @@ import json
 from json import JSONEncoder
 import os
 import datetime
+from botocore.client import BaseClient
+from typing import Dict, Any, List, Union
 from shared.wrappers import BadRequest, api_exception_handler
 from shared.logger import get_logger
 from shared.helper import get_client
@@ -45,7 +47,7 @@ class DateTimeEncoder(JSONEncoder):
 
 
 @api_exception_handler
-def handler(event, context):
+def handler(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     if "httpMethod" in event and event["httpMethod"] == "POST":  # Lambda is being invoked from API Gateway
         if event["path"] == "/provisionpipeline":
             return provision_pipeline(json.loads(event["body"]))
@@ -57,12 +59,16 @@ def handler(event, context):
         return provision_pipeline(event)
     else:
         raise BadRequest(
-            "Bad request format. Expected httpMethod or pipeline_type, recevied none. Check documentation "
+            "Bad request format. Expected httpMethod or pipeline_type, received none. Check documentation "
             + "for API & config formats."
         )
 
 
-def provision_pipeline(event, client=cloudformation_client, s3_client=s3_client):
+def provision_pipeline(
+    event: Dict[str, Any],
+    client: BaseClient = cloudformation_client,
+    s3_client: BaseClient = s3_client,
+) -> Dict[str, Any]:
     """
     provision_pipeline takes the lambda event object and creates a cloudformation stack
 
@@ -109,7 +115,7 @@ def provision_pipeline(event, client=cloudformation_client, s3_client=s3_client)
         codepipeline_params = get_codepipeline_params(
             is_multi_account, provisioned_pipeline_stack_name, template_zip_name, template_file_name
         )
-        # format the params (the format is the same for multi-accouunt parameters)
+        # format the params (the format is the same for multi-account parameters)
         formatted_codepipeline_params = format_template_parameters(codepipeline_params, "True")
         # create the codepipeline
         stack_response = create_codepipeline_stack(
@@ -143,7 +149,12 @@ def provision_pipeline(event, client=cloudformation_client, s3_client=s3_client)
     return response
 
 
-def update_stack(codepipeline_stack_name, pipeline_template_url, template_parameters, client):
+def update_stack(
+    codepipeline_stack_name: str,
+    pipeline_template_url: str,
+    template_parameters: List[Dict[str, str]],
+    client: BaseClient,
+) -> Dict[str, str]:
     try:
         update_response = client.update_stack(
             StackName=codepipeline_stack_name,
@@ -171,8 +182,11 @@ def update_stack(codepipeline_stack_name, pipeline_template_url, template_parame
 
 
 def create_codepipeline_stack(
-    codepipeline_stack_name, pipeline_template_url, template_parameters, client=cloudformation_client
-):
+    codepipeline_stack_name: str,
+    pipeline_template_url: str,
+    template_parameters: List[Dict[str, str]],
+    client: BaseClient = cloudformation_client,
+) -> Dict[str, str]:
     try:
         stack_response = client.create_stack(
             StackName=codepipeline_stack_name,
@@ -204,7 +218,9 @@ def create_codepipeline_stack(
             raise e
 
 
-def pipeline_status(event, cfn_client=cloudformation_client, cp_client=codepipeline_client):
+def pipeline_status(
+    event: Dict[str, Any], cfn_client: BaseClient = cloudformation_client, cp_client: BaseClient = codepipeline_client
+) -> Dict[str, Any]:
     """
     pipeline_status takes the lambda event object and returns the status of codepipeline project that's
     running the pipeline

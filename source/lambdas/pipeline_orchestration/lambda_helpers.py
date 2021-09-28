@@ -16,28 +16,30 @@ import sagemaker
 import shutil
 import tempfile
 import uuid
+from typing import Dict, List, Tuple, Union, Any
+from botocore.client import BaseClient
 from shared.wrappers import BadRequest
-from shared.helper import get_built_in_model_monitor_container_uri
 from shared.logger import get_logger
 
 
 logger = get_logger(__name__)
 
 
-def template_url(pipeline_type):
+def template_url(pipeline_type: str) -> str:
     """
     template_url is a helper function that determines the cloudformation stack's file name based on
     inputs
 
     :pipeline_type: type of pipeline. Supported values:
     "byom_realtime_builtin"|"byom_realtime_custom"|"byom_batch_builtin"|"byom_batch_custom"|
-    "byom_model_monitor"|"byom_image_builder"|"single_account_codepipeline"|
+    "byom_data_quality_monitor"|"byom_model_quality_monitor"|"byom_image_builder"|"single_account_codepipeline"|
     "multi_account_codepipeline"
 
-    :return: returns a link to the appropriate coudformation template files which can be one of these values:
+    :return: returns a link to the appropriate cloudformation template files which can be one of these values:
     byom_realtime_inference_pipeline.yaml
     byom_batch_pipeline.yaml
-    byom_model_monitor.yaml
+    byom_data_quality_monitor.yaml
+    byom_model_quality_monitor.yaml
     byom_custom_algorithm_image_builder.yaml
     single_account_codepipeline.yaml
     multi_account_codepipeline.yaml
@@ -51,7 +53,8 @@ def template_url(pipeline_type):
         "byom_realtime_custom": realtime_inference_template,
         "byom_batch_builtin": batch_inference_template,
         "byom_batch_custom": batch_inference_template,
-        "byom_model_monitor": "blueprints/byom/byom_model_monitor.yaml",
+        "byom_data_quality_monitor": "blueprints/byom/byom_data_quality_monitor.yaml",
+        "byom_model_quality_monitor": "blueprints/byom/byom_model_quality_monitor.yaml",
         "byom_image_builder": f"{url}/byom_custom_algorithm_image_builder.yaml",
         "single_account_codepipeline": f"{url}/single_account_codepipeline.yaml",
         "multi_account_codepipeline": f"{url}/multi_account_codepipeline.yaml",
@@ -64,7 +67,7 @@ def template_url(pipeline_type):
         raise BadRequest(f"Bad request. Pipeline type: {pipeline_type} is not supported.")
 
 
-def get_stage_param(event, api_key, stage):
+def get_stage_param(event: Dict[str, Any], api_key: str, stage: str) -> str:
     api_key_value = event.get(api_key, "")
     if isinstance(api_key_value, dict) and stage in list(api_key_value.keys()):
         api_key_value = api_key_value[stage]
@@ -72,7 +75,7 @@ def get_stage_param(event, api_key, stage):
     return api_key_value
 
 
-def get_stack_name(event):
+def get_stack_name(event: Dict[str, Any]) -> str:
     pipeline_type = event.get("pipeline_type")
     pipeline_stack_name = os.environ["PIPELINE_STACK_NAME"]
     model_name = event.get("model_name", "").lower().strip()
@@ -92,8 +95,11 @@ def get_stack_name(event):
         # name of stack
         provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-{postfix[pipeline_type]}"
 
-    elif pipeline_type == "byom_model_monitor":
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-BYOMModelMonitor"
+    elif pipeline_type == "byom_data_quality_monitor":
+        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-BYOMDataQualityMonitor"
+
+    elif pipeline_type == "byom_model_quality_monitor":
+        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-BYOMModelQualityMonitor"
 
     elif pipeline_type == "byom_image_builder":
         image_tag = event.get("image_tag")
@@ -102,15 +108,15 @@ def get_stack_name(event):
     return provisioned_pipeline_stack_name.lower()
 
 
-def get_template_parameters(event, is_multi_account, stage=None):
+def get_template_parameters(event: Dict[str, Any], is_multi_account: bool, stage: str = None) -> List[Tuple[str, str]]:
     pipeline_type = event.get("pipeline_type")
     region = os.environ["REGION"]
 
     kms_key_arn = get_stage_param(event, "kms_key_arn", stage)
     common_params = [
-        ("ASSETSBUCKET", os.environ["ASSETS_BUCKET"]),
-        ("KMSKEYARN", kms_key_arn),
-        ("BLUEPRINTBUCKET", os.environ["BLUEPRINT_BUCKET"]),
+        ("AssetsBucket", os.environ["ASSETS_BUCKET"]),
+        ("KmsKeyArn", kms_key_arn),
+        ("BlueprintBucket", os.environ["BLUEPRINT_BUCKET"]),
     ]
     if pipeline_type in [
         "byom_realtime_builtin",
@@ -121,18 +127,20 @@ def get_template_parameters(event, is_multi_account, stage=None):
 
         common_params.extend(get_common_realtime_batch_params(event, region, stage))
 
-        # add realtime specfic parameters
+        # add realtime specific parameters
         if pipeline_type in ["byom_realtime_builtin", "byom_realtime_custom"]:
             common_params.extend(get_realtime_specific_params(event, stage))
         # else add batch params
         else:
-            common_params.extend(get_bacth_specific_params(event, stage))
+            common_params.extend(get_batch_specific_params(event, stage))
 
         return common_params
 
-    elif pipeline_type == "byom_model_monitor":
-        common_params.extend(get_model_monitor_params(event, region, stage))
-        return common_params
+    elif pipeline_type == "byom_data_quality_monitor":
+        return [*common_params, *get_model_monitor_params(event, region, stage)]
+
+    elif pipeline_type == "byom_model_quality_monitor":
+        return [*common_params, *get_model_monitor_params(event, region, stage, monitoring_type="ModelQuality")]
 
     elif pipeline_type == "byom_image_builder":
         return get_image_builder_params(event)
@@ -141,40 +149,42 @@ def get_template_parameters(event, is_multi_account, stage=None):
         raise BadRequest("Bad request format. Please provide a supported pipeline")
 
 
-def get_codepipeline_params(is_multi_account, stack_name, template_zip_name, template_file_name):
+def get_codepipeline_params(
+    is_multi_account: str, stack_name: str, template_zip_name: str, template_file_name: str
+) -> List[Tuple[str, str]]:
 
     single_account_params = [
-        ("NOTIFICATIONEMAIL", os.environ["NOTIFICATION_EMAIL"]),
-        ("TEMPLATEZIPNAME", template_zip_name),
-        ("TEMPLATEFILENAME", template_file_name),
-        ("ASSETSBUCKET", os.environ["ASSETS_BUCKET"]),
-        ("STACKNAME", stack_name),
+        ("NotificationEmail", os.environ["NOTIFICATION_EMAIL"]),
+        ("TemplateZipFileName", template_zip_name),
+        ("TemplateFileName", template_file_name),
+        ("AssetsBucket", os.environ["ASSETS_BUCKET"]),
+        ("StackName", stack_name),
     ]
     if is_multi_account == "False":
-        single_account_params.extend([("TEMPLATEPARAMSNAME", "template_params.json")])
+        single_account_params.extend([("TemplateParamsName", "template_params.json")])
         return single_account_params
 
     else:
         single_account_params.extend(
             [
-                ("DEVPARAMSNAME", "dev_template_params.json"),
-                ("STAGINGPARAMSNAME", "staging_template_params.json"),
-                ("PRODPARAMSNAME", "prod_template_params.json"),
-                ("DEVACCOUNTID", os.environ["DEV_ACCOUNT_ID"]),
-                ("DEVORGID", os.environ["DEV_ORG_ID"]),
-                ("STAGINGACCOUNTID", os.environ["STAGING_ACCOUNT_ID"]),
-                ("STAGINGORGID", os.environ["STAGING_ORG_ID"]),
-                ("PRODACCOUNTID", os.environ["PROD_ACCOUNT_ID"]),
-                ("PRODORGID", os.environ["PROD_ORG_ID"]),
-                ("BLUEPRINTBUCKET", os.environ["BLUEPRINT_BUCKET"]),
-                ("DELEGATEDADMINACCOUNT", os.environ["IS_DELEGATED_ADMIN"]),
+                ("DevParamsName", "dev_template_params.json"),
+                ("StagingParamsName", "staging_template_params.json"),
+                ("ProdParamsName", "prod_template_params.json"),
+                ("DevAccountId", os.environ["DEV_ACCOUNT_ID"]),
+                ("DevOrgId", os.environ["DEV_ORG_ID"]),
+                ("StagingAccountId", os.environ["STAGING_ACCOUNT_ID"]),
+                ("StagingOrgId", os.environ["STAGING_ORG_ID"]),
+                ("ProdAccountId", os.environ["PROD_ACCOUNT_ID"]),
+                ("ProdOrgId", os.environ["PROD_ORG_ID"]),
+                ("BlueprintBucket", os.environ["BLUEPRINT_BUCKET"]),
+                ("DelegatedAdminAccount", os.environ["IS_DELEGATED_ADMIN"]),
             ]
         )
 
         return single_account_params
 
 
-def get_common_realtime_batch_params(event, region, stage):
+def get_common_realtime_batch_params(event: Dict[str, Any], region: str, stage: str) -> List[Tuple[str, str]]:
     inference_instance = get_stage_param(event, "inference_instance", stage)
     image_uri = (
         get_image_uri(event.get("pipeline_type"), event, region) if os.environ["USE_MODEL_REGISTRY"] == "No" else ""
@@ -187,84 +197,119 @@ def get_common_realtime_batch_params(event, region, stage):
         else ""
     )
     return [
-        ("MODELNAME", event.get("model_name")),
-        ("MODELARTIFACTLOCATION", event.get("model_artifact_location", "")),
-        ("INFERENCEINSTANCE", inference_instance),
-        ("CUSTOMALGORITHMSECRREPOARN", os.environ["ECR_REPO_ARN"]),
-        ("IMAGEURI", image_uri),
-        ("MODELPACKAGEGROUPNAME", model_package_group_name),
-        ("MODELPACKAGENAME", event.get("model_package_name", "")),
+        ("ModelName", event.get("model_name")),
+        ("ModelArtifactLocation", event.get("model_artifact_location", "")),
+        ("InferenceInstance", inference_instance),
+        ("CustomAlgorithmsECRRepoArn", os.environ["ECR_REPO_ARN"]),
+        ("ImageUri", image_uri),
+        ("ModelPackageGroupName", model_package_group_name),
+        ("ModelPackageName", event.get("model_package_name", "")),
     ]
 
 
-def clean_param(param):
+def clean_param(param: str) -> str:
+    # if the paramter's value ends with '/', remove it
     if param.endswith("/"):
         return param[:-1]
     else:
         return param
 
 
-def get_realtime_specific_params(event, stage):
+def get_realtime_specific_params(event: Dict[str, Any], stage: str) -> List[Tuple[str, str]]:
     data_capture_location = clean_param(get_stage_param(event, "data_capture_location", stage))
-    return [("DATACAPTURELOCATION", data_capture_location)]
+    endpoint_name = get_stage_param(event, "endpoint_name", stage).lower().strip()
+    return [("DataCaptureLocation", data_capture_location), ("EndpointName", endpoint_name)]
 
 
-def get_bacth_specific_params(event, stage):
+def get_batch_specific_params(event: Dict[str, Any], stage: str) -> List[Tuple[str, str]]:
     batch_inference_data = get_stage_param(event, "batch_inference_data", stage)
     batch_job_output_location = clean_param(get_stage_param(event, "batch_job_output_location", stage))
     return [
-        ("BATCHINPUTBUCKET", batch_inference_data.split("/")[0]),
-        ("BATCHINFERENCEDATA", batch_inference_data),
-        ("BATCHOUTPUTLOCATION", batch_job_output_location),
+        ("BatchInputBucket", batch_inference_data.split("/")[0]),
+        ("BatchInferenceData", batch_inference_data),
+        ("BatchOutputLocation", batch_job_output_location),
     ]
 
 
-def get_model_monitor_params(event, region, stage):
+def get_built_in_model_monitor_image_uri(region, image_name="model-monitor"):
+    model_monitor_image_uri = sagemaker.image_uris.retrieve(
+        framework=image_name,
+        region=region,
+    )
+
+    return model_monitor_image_uri
+
+
+def get_model_monitor_params(
+    event: Dict[str, Any], region: str, stage: str, monitoring_type: str = "DataQuality"
+) -> List[Tuple[str, str]]:
     endpoint_name = get_stage_param(event, "endpoint_name", stage).lower().strip()
-    monitoring_type = event.get("monitoring_type", "dataquality")
 
     # generate jobs names
-    baseline_job_name = f"{endpoint_name}-baseline-job-{str(uuid.uuid4())[:4]}"
-    monitoring_schedule_name = f"{endpoint_name}-monitor-{str(uuid.uuid4())[:4]}"
+    # make sure baseline_job_name and monitoring_schedule_name are <= 63 characters long, especially
+    # if endpoint_name was dynamically generated by AWS CDK.
+    baseline_job_name = f"{endpoint_name}-{monitoring_type.lower()}-baseline-{str(uuid.uuid4())[:4]}"
+    monitoring_schedule_name = f"{endpoint_name}-{monitoring_type.lower()}-monitor-{str(uuid.uuid4())[:4]}"
 
     baseline_job_output_location = clean_param(get_stage_param(event, "baseline_job_output_location", stage))
-    data_capture_location = clean_param(get_stage_param(event, "baseline_job_output_location", stage))
+    data_capture_location = clean_param(get_stage_param(event, "data_capture_location", stage))
     instance_type = get_stage_param(event, "instance_type", stage)
     instance_volume_size = get_stage_param(event, "instance_volume_size", stage)
-    max_runtime_seconds = get_stage_param(event, "max_runtime_seconds", stage)
+    baseline_max_runtime_seconds = get_stage_param(event, "baseline_max_runtime_seconds", stage)
+    monitor_max_runtime_seconds = get_stage_param(event, "monitor_max_runtime_seconds", stage)
     monitoring_output_location = clean_param(get_stage_param(event, "monitoring_output_location", stage))
     schedule_expression = get_stage_param(event, "schedule_expression", stage)
+    monitor_ground_truth_input = get_stage_param(event, "monitor_ground_truth_input", stage)
 
+    monitor_params = [
+        ("BaselineJobName", baseline_job_name),
+        ("BaselineOutputBucket", baseline_job_output_location.split("/")[0]),
+        ("BaselineJobOutputLocation", f"{baseline_job_output_location}/{baseline_job_name}"),
+        ("DataCaptureBucket", data_capture_location.split("/")[0]),
+        ("DataCaptureLocation", data_capture_location),
+        ("EndpointName", endpoint_name),
+        ("ImageUri", get_built_in_model_monitor_image_uri(region)),
+        ("InstanceType", instance_type),
+        ("InstanceVolumeSize", instance_volume_size),
+        ("BaselineMaxRuntimeSeconds", baseline_max_runtime_seconds),
+        ("MonitorMaxRuntimeSeconds", monitor_max_runtime_seconds),
+        ("MonitoringOutputLocation", monitoring_output_location),
+        ("MonitoringScheduleName", monitoring_schedule_name),
+        ("ScheduleExpression", schedule_expression),
+        ("BaselineData", event.get("baseline_data")),
+    ]
+
+    # add ModelQuality parameters
+    if monitoring_type == "ModelQuality":
+        monitor_params.extend(
+            [
+                ("BaselineInferenceAttribute", event.get("baseline_inference_attribute", "").strip()),
+                ("BaselineProbabilityAttribute", event.get("baseline_probability_attribute", "").strip()),
+                ("BaselineGroundTruthAttribute", event.get("baseline_ground_truth_attribute", "").strip()),
+                ("ProblemType", event.get("problem_type", "").strip()),
+                ("MonitorInferenceAttribute", event.get("monitor_inference_attribute", "").strip()),
+                ("MonitorProbabilityAttribute", event.get("monitor_probability_attribute", "").strip()),
+                ("ProbabilityThresholdAttribute", event.get("probability_threshold_attribute", "").strip()),
+                ("MonitorGroundTruthInput", monitor_ground_truth_input),
+            ]
+        )
+
+    return monitor_params
+
+
+def get_image_builder_params(event: Dict[str, Any]) -> List[Tuple[str, str]]:
     return [
-        ("BASELINEJOBNAME", baseline_job_name),
-        ("BASELINEOUTPUTBUCKET", baseline_job_output_location.split("/")[0]),
-        ("BASELINEJOBOUTPUTLOCATION", baseline_job_output_location),
-        ("DATACAPTUREBUCKET", data_capture_location.split("/")[0]),
-        ("DATACAPTURELOCATION", data_capture_location),
-        ("ENDPOINTNAME", endpoint_name),
-        ("IMAGEURI", get_built_in_model_monitor_container_uri(region)),
-        ("INSTANCETYPE", instance_type),
-        ("INSTANCEVOLUMESIZE", instance_volume_size),
-        ("MAXRUNTIMESECONDS", max_runtime_seconds),
-        ("MONITORINGOUTPUTLOCATION", monitoring_output_location),
-        ("MONITORINGSCHEDULENAME", monitoring_schedule_name),
-        ("MONITORINGTYPE", monitoring_type),
-        ("SCHEDULEEXPRESSION", schedule_expression),
-        ("TRAININGDATA", event.get("training_data")),
+        ("NotificationEmail", os.environ["NOTIFICATION_EMAIL"]),
+        ("AssetsBucket", os.environ["ASSETS_BUCKET"]),
+        ("CustomImage", event.get("custom_algorithm_docker")),
+        ("ECRRepoName", event.get("ecr_repo_name")),
+        ("ImageTag", event.get("image_tag")),
     ]
 
 
-def get_image_builder_params(event):
-    return [
-        ("NOTIFICATIONEMAIL", os.environ["NOTIFICATION_EMAIL"]),
-        ("ASSETSBUCKET", os.environ["ASSETS_BUCKET"]),
-        ("CUSTOMCONTAINER", event.get("custom_algorithm_docker")),
-        ("ECRREPONAME", event.get("ecr_repo_name")),
-        ("IMAGETAG", event.get("image_tag")),
-    ]
-
-
-def format_template_parameters(key_value_list, is_multi_account):
+def format_template_parameters(
+    key_value_list: List[str], is_multi_account: str
+) -> Union[List[Dict[str, str]], Dict[str, Dict[str, str]]]:
     if is_multi_account == "True":
         # for the multi-account option, the StackSet action, used by multi-account codepipeline,
         # requires this parameters format
@@ -275,36 +320,42 @@ def format_template_parameters(key_value_list, is_multi_account):
         return {"Parameters": {param[0]: param[1] for param in key_value_list}}
 
 
-def write_params_to_json(params, file_path):
+def write_params_to_json(params: Union[List[Dict[str, str]], Dict[str, Dict[str, str]]], file_path: str) -> None:
     with open(file_path, "w") as fp:
         json.dump(params, fp, indent=4)
 
 
-def upload_file_to_s3(local_file_path, s3_bucket_name, s3_file_key, s3_client):
+def upload_file_to_s3(local_file_path: str, s3_bucket_name: str, s3_file_key: str, s3_client: BaseClient) -> None:
     s3_client.upload_file(local_file_path, s3_bucket_name, s3_file_key)
 
 
-def download_file_from_s3(s3_bucket_name, file_key, local_file_path, s3_client):
+def download_file_from_s3(s3_bucket_name: str, file_key: str, local_file_path: str, s3_client: BaseClient) -> None:
     s3_client.download_file(s3_bucket_name, file_key, local_file_path)
 
 
 def create_template_zip_file(
-    event, blueprint_bucket, assets_bucket, template_url, template_zip_name, is_multi_account, s3_client
-):
+    event: Dict[str, Any],
+    blueprint_bucket: str,
+    assets_bucket: str,
+    template_url: str,
+    template_zip_name: str,
+    is_multi_account: str,
+    s3_client: BaseClient,
+) -> None:
     zip_output_filename = "template"
 
-    # create a tmpdir for the zip file to downlaod
+    # create a tmpdir for the zip file to download
     local_directory = tempfile.mkdtemp()
     local_file_path = os.path.join(local_directory, template_url.split("/")[-1])
 
-    # downloawd the template from the blueprints bucket
+    # download the template from the blueprints bucket
     download_file_from_s3(blueprint_bucket, template_url, local_file_path, s3_client)
 
     # create tmpdir to zip clodformation and stages parameters
     zip_local_directory = tempfile.mkdtemp()
     zip_file_path = os.path.join(zip_local_directory, zip_output_filename)
 
-    # downloawd the template from the blueprints bucket
+    # download the template from the blueprints bucket
     download_file_from_s3(blueprint_bucket, template_url, f"{local_directory}/{template_url.split('/')[-1]}", s3_client)
 
     # write the params to json file(s)
@@ -326,7 +377,7 @@ def create_template_zip_file(
         local_directory,
     )
 
-    # uploda file
+    # upload file
     upload_file_to_s3(
         f"{zip_file_path}.zip",
         assets_bucket,
@@ -335,7 +386,7 @@ def create_template_zip_file(
     )
 
 
-def get_image_uri(pipeline_type, event, region):
+def get_image_uri(pipeline_type: str, event: Dict[str, Any], region: str) -> str:
     if pipeline_type in ["byom_realtime_custom", "byom_batch_custom"]:
         return event.get("custom_image_uri")
     elif pipeline_type in ["byom_realtime_builtin", "byom_batch_builtin"]:
@@ -343,10 +394,24 @@ def get_image_uri(pipeline_type, event, region):
             framework=event.get("model_framework"), region=region, version=event.get("model_framework_version")
         )
     else:
-        raise Exception("Unsupported pipeline by get_image_uri function")
+        raise ValueError("Unsupported pipeline by get_image_uri function")
 
 
-def get_required_keys(pipeline_type, use_model_registry):
+def get_required_keys(pipeline_type: str, use_model_registry: str, problem_type: str = None) -> List[str]:
+    # common required keys between model monitor types
+    common_monitor_keys = [
+        "pipeline_type",
+        "model_name",
+        "endpoint_name",
+        "baseline_data",
+        "baseline_job_output_location",
+        "data_capture_location",
+        "monitoring_output_location",
+        "schedule_expression",
+        "monitor_max_runtime_seconds",
+        "instance_type",
+        "instance_volume_size",
+    ]
     # Realtime/batch pipelines
     if pipeline_type in [
         "byom_realtime_builtin",
@@ -374,19 +439,31 @@ def get_required_keys(pipeline_type, use_model_registry):
 
         return keys_map[pipeline_type]
 
-    # Model Monitor pipeline
-    elif pipeline_type == "byom_model_monitor":
+    # Data Quality Monitor pipeline
+    elif pipeline_type == "byom_data_quality_monitor":
+        return common_monitor_keys
+    # Model Quality Monitor pipeline
+    elif pipeline_type == "byom_model_quality_monitor":
+        common_model_keys = [
+            "baseline_inference_attribute",
+            "baseline_ground_truth_attribute",
+            "problem_type",
+            "monitor_ground_truth_input",
+        ]
+        if problem_type in ["Regression", "MulticlassClassification"]:
+            common_model_keys.append("monitor_inference_attribute")
+
+        elif problem_type == "BinaryClassification":
+            common_model_keys.extend(
+                ["monitor_probability_attribute", "probability_threshold_attribute", "baseline_probability_attribute"]
+            )
+
+        else:
+            raise BadRequest("Bad request format. Unsupported problem_type in byom_model_quality_monitor pipeline")
+
         return [
-            "pipeline_type",
-            "model_name",
-            "endpoint_name",
-            "training_data",
-            "baseline_job_output_location",
-            "data_capture_location",
-            "monitoring_output_location",
-            "schedule_expression",
-            "instance_type",
-            "instance_volume_size",
+            *common_monitor_keys,
+            *common_model_keys,
         ]
     # Image Builder pipeline
     elif pipeline_type == "byom_image_builder":
@@ -403,17 +480,19 @@ def get_required_keys(pipeline_type, use_model_registry):
         )
 
 
-def validate(event):
+def validate(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     validate is a helper function that checks if all required input parameters are present in the handler's event object
 
     :event: Lambda function's event object
 
-    :return: returns the event back if it passes the validation othewise it raises a bad request exception
+    :return: returns the event back if it passes the validation otherwise it raises a bad request exception
     :raises: BadRequest Exception
     """
     # get the required keys to validate the event
-    required_keys = get_required_keys(event.get("pipeline_type", ""), os.environ["USE_MODEL_REGISTRY"])
+    required_keys = get_required_keys(
+        event.get("pipeline_type", "").strip(), os.environ["USE_MODEL_REGISTRY"], event.get("problem_type", "").strip()
+    )
     for key in required_keys:
         if key not in event:
             logger.error(f"Request event did not have parameter: {key}")

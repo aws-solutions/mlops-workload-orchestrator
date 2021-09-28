@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -28,13 +28,7 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_iam_complex,
     suppress_sns,
 )
-from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_notification_email_parameter,
-    create_assets_bucket_name_parameter,
-    create_custom_container_parameter,
-    create_ecr_repo_name_parameter,
-    create_image_tag_parameter,
-)
+from lib.blueprints.byom.pipeline_definitions.templates_parameters import ParameteresFactory as pf
 
 
 class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
@@ -42,14 +36,14 @@ class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        notification_email = create_notification_email_parameter(self)
-        assets_bucket_name = create_assets_bucket_name_parameter(self)
-        custom_container = create_custom_container_parameter(self)
-        ecr_repo_name = create_ecr_repo_name_parameter(self)
-        image_tag = create_image_tag_parameter(self)
+        notification_email = pf.create_notification_email_parameter(self)
+        assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
+        custom_container = pf.create_custom_container_parameter(self)
+        ecr_repo_name = pf.create_ecr_repo_name_parameter(self)
+        image_tag = pf.create_image_tag_parameter(self)
 
         # Resources #
-        assets_bucket = s3.Bucket.from_bucket_name(self, "AssetsBucket", assets_bucket_name.value_as_string)
+        assets_bucket = s3.Bucket.from_bucket_name(self, "ImportedAssetsBucket", assets_bucket_name.value_as_string)
 
         # Defining pipeline stages
         # source stage
@@ -75,7 +69,7 @@ class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
 
         image_builder_pipeline = codepipeline.Pipeline(
             self,
-            "BYOMPipelineReatimeBuild",
+            "BYOMPipelineRealtimeBuild",
             stages=[source_stage, build_stage],
             cross_account_keys=False,
         )
@@ -103,7 +97,7 @@ class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
             )
         )
 
-        # add cfn nag supressions
+        # add cfn nag suppressions
         pipeline_child_nodes = image_builder_pipeline.node.find_all()
         pipeline_child_nodes[1].node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
         pipeline_child_nodes[6].node.default_child.cfn_options.metadata = suppress_iam_complex()
