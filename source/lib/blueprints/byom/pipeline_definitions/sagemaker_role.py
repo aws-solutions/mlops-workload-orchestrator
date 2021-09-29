@@ -19,8 +19,8 @@ from lib.conditional_resource import ConditionalResources
 from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     ecr_policy_document,
     kms_policy_document,
-    sagemaker_policiy_statement,
-    sagemaker_monitor_policiy_statement,
+    sagemaker_policy_statement,
+    sagemaker_monitor_policy_statement,
     sagemaker_tags_policy_statement,
     sagemaker_logs_metrics_policy_document,
     s3_policy_read,
@@ -44,8 +44,11 @@ def create_sagemaker_role(
     ecr_repo_arn_provided_condition,
     kms_key_arn_provided_condition,
     model_registry_provided_condition,
+    is_realtime_pipeline=False,
+    endpoint_name=None,
+    endpoint_name_provided=None,
 ):
-    # create optional polocies
+    # create optional policies
     ecr_policy = ecr_policy_document(scope, "MLOpsECRPolicy", custom_algorithms_ecr_arn)
     kms_policy = kms_policy_document(scope, "MLOpsKmsPolicy", kms_key_arn)
     model_registry = model_registry_policy_document(scope, "ModelRegistryPolicy", model_package_group_name)
@@ -59,7 +62,7 @@ def create_sagemaker_role(
     role = iam.Role(scope, id, assumed_by=iam.ServicePrincipal("sagemaker.amazonaws.com"))
 
     # permissions to create sagemaker resources
-    sagemaker_policy = sagemaker_policiy_statement()
+    sagemaker_policy = sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_name_provided)
 
     # sagemaker tags permissions
     sagemaker_tags_policy = sagemaker_tags_policy_statement()
@@ -88,7 +91,7 @@ def create_sagemaker_role(
     # IAM GetRole permission
     get_role_policy = get_role_policy_statement(role)
 
-    # add policy statments
+    # add policy statements
     role.add_to_policy(sagemaker_policy)
     role.add_to_policy(sagemaker_tags_policy)
     logs_policy.attach_to_role(role)

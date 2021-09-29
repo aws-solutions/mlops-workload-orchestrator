@@ -59,7 +59,7 @@ def lambda_handler(event, context):
         # {"stackset_name": "model2", "artifact":"SourceArtifact",
         # "template_file":"realtime-inference-pipeline.yaml",
         # "stage_params_file":"staging-config.json",
-        # "accound_ids":["<account_id>"], "org_ids":["<org_unit_id>"],
+        # "account_ids":["<account_id>"], "org_ids":["<org_unit_id>"],
         # "regions":["us-east-1"]}
         params = get_user_params(job_data)
 
@@ -70,15 +70,15 @@ def lambda_handler(event, context):
         artifact = params["artifact"]
         template_file = params["template_file"]
         stage_params_file = params["stage_params_file"]
-        accound_ids = params["accound_ids"]
+        account_ids = params["account_ids"]
         org_ids = params["org_ids"]
         regions = params["regions"]
 
         if "continuationToken" in job_data:
-            logger.info(f"Ckecking the status of {stackset_name}")
+            logger.info(f"Checking the status of {stackset_name}")
             # If we're continuing then the create/update has already been triggered
             # we just need to check if it has finished.
-            check_stackset_update_status(job_id, stackset_name, accound_ids[0], regions[0], cf_client, cp_client)
+            check_stackset_update_status(job_id, stackset_name, account_ids[0], regions[0], cf_client, cp_client)
 
         else:
             logger.info(f"Creating StackSet {stackset_name} and its instances")
@@ -95,7 +95,7 @@ def lambda_handler(event, context):
                 stackset_name,
                 template,
                 json.loads(stage_params),
-                accound_ids,
+                account_ids,
                 org_ids,
                 regions,
                 cf_client,

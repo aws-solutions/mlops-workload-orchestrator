@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -25,20 +25,8 @@ from lib.blueprints.byom.pipeline_definitions.sagemaker_endpoint_config import c
 from lib.blueprints.byom.pipeline_definitions.sagemaker_endpoint import create_sagemaker_endpoint
 from lib.blueprints.byom.pipeline_definitions.helpers import suppress_lambda_policies
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_blueprint_bucket_name_parameter,
-    create_assets_bucket_name_parameter,
-    create_algorithm_image_uri_parameter,
-    create_custom_algorithms_ecr_repo_arn_parameter,
-    create_inference_instance_parameter,
-    create_kms_key_arn_parameter,
-    create_model_artifact_location_parameter,
-    create_model_name_parameter,
-    create_data_capture_location_parameter,
-    create_custom_algorithms_ecr_repo_arn_provided_condition,
-    create_kms_key_arn_provided_condition,
-    create_model_package_name_parameter,
-    create_model_registry_provided_condition,
-    create_model_package_group_name_parameter,
+    ParameteresFactory as pf,
+    ConditionsFactory as cf,
 )
 
 
@@ -47,28 +35,33 @@ class BYOMRealtimePipelineStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        assets_bucket_name = create_assets_bucket_name_parameter(self)
-        blueprint_bucket_name = create_blueprint_bucket_name_parameter(self)
-        custom_algorithms_ecr_repo_arn = create_custom_algorithms_ecr_repo_arn_parameter(self)
-        kms_key_arn = create_kms_key_arn_parameter(self)
-        algorithm_image_uri = create_algorithm_image_uri_parameter(self)
-        model_name = create_model_name_parameter(self)
-        model_artifact_location = create_model_artifact_location_parameter(self)
-        data_capture_location = create_data_capture_location_parameter(self)
-        inference_instance = create_inference_instance_parameter(self)
-        model_package_group_name = create_model_package_group_name_parameter(self)
-        model_package_name = create_model_package_name_parameter(self)
+        assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
+        blueprint_bucket_name = pf.create_blueprint_bucket_name_parameter(self)
+        custom_algorithms_ecr_repo_arn = pf.create_custom_algorithms_ecr_repo_arn_parameter(self)
+        kms_key_arn = pf.create_kms_key_arn_parameter(self)
+        algorithm_image_uri = pf.create_algorithm_image_uri_parameter(self)
+        model_name = pf.create_model_name_parameter(self)
+        model_artifact_location = pf.create_model_artifact_location_parameter(self)
+        data_capture_location = pf.create_data_capture_location_parameter(self)
+        inference_instance = pf.create_inference_instance_parameter(self)
+        model_package_group_name = pf.create_model_package_group_name_parameter(self)
+        model_package_name = pf.create_model_package_name_parameter(self)
+        # add the optional endpoint_name
+        endpoint_name = pf.create_endpoint_name_parameter(self, optional=True)
 
         # Conditions
-        custom_algorithms_ecr_repo_arn_provided = create_custom_algorithms_ecr_repo_arn_provided_condition(
+        custom_algorithms_ecr_repo_arn_provided = cf.create_custom_algorithms_ecr_repo_arn_provided_condition(
             self, custom_algorithms_ecr_repo_arn
         )
-        kms_key_arn_provided = create_kms_key_arn_provided_condition(self, kms_key_arn)
-        model_registry_provided = create_model_registry_provided_condition(self, model_package_name)
+        kms_key_arn_provided = cf.create_kms_key_arn_provided_condition(self, kms_key_arn)
+        model_registry_provided = cf.create_model_registry_provided_condition(self, model_package_name)
+        endpoint_name_provided = cf.create_endpoint_name_provided_condition(self, endpoint_name)
 
         # Resources #
         # getting blueprint bucket object from its name - will be used later in the stack
-        blueprint_bucket = s3.Bucket.from_bucket_name(self, "BlueprintBucket", blueprint_bucket_name.value_as_string)
+        blueprint_bucket = s3.Bucket.from_bucket_name(
+            self, "ImportedBlueprintBucket", blueprint_bucket_name.value_as_string
+        )
 
         # provision api gateway and lambda for inference using solution constructs
         inference_api_gateway = aws_apigateway_lambda.ApiGatewayToLambda(
@@ -87,7 +80,7 @@ class BYOMRealtimePipelineStack(core.Stack):
                 "proxy": False,
             },
         )
-        # add supressions
+        # add suppressions
         inference_api_gateway.lambda_function.node.default_child.cfn_options.metadata = suppress_lambda_policies()
         provision_resource = inference_api_gateway.api_gateway.root.add_resource("inference")
         provision_resource.add_method("POST")
@@ -106,6 +99,9 @@ class BYOMRealtimePipelineStack(core.Stack):
             ecr_repo_arn_provided_condition=custom_algorithms_ecr_repo_arn_provided,
             kms_key_arn_provided_condition=kms_key_arn_provided,
             model_registry_provided_condition=model_registry_provided,
+            is_realtime_pipeline=True,
+            endpoint_name=endpoint_name,
+            endpoint_name_provided=endpoint_name_provided,
         )
 
         # create sagemaker model
@@ -121,15 +117,15 @@ class BYOMRealtimePipelineStack(core.Stack):
             model_name=model_name.value_as_string,
         )
 
-        # Create Sagemaker EndpointConfg
+        # Create Sagemaker EndpointConfig
         sagemaker_endpoint_config = create_sagemaker_endpoint_config(
-            self,
-            "MLOpsSagemakerEndpointConfig",
-            sagemaker_model.attr_model_name,
-            model_name.value_as_string,
-            inference_instance.value_as_string,
-            data_capture_location.value_as_string,
-            core.Fn.condition_if(
+            scope=self,
+            id="MLOpsSagemakerEndpointConfig",
+            sagemaker_model_name=sagemaker_model.attr_model_name,
+            model_name=model_name.value_as_string,
+            inference_instance=inference_instance.value_as_string,
+            data_capture_location=data_capture_location.value_as_string,
+            kms_key_arn=core.Fn.condition_if(
                 kms_key_arn_provided.logical_id, kms_key_arn.value_as_string, core.Aws.NO_VALUE
             ).to_string(),
         )
@@ -139,10 +135,15 @@ class BYOMRealtimePipelineStack(core.Stack):
 
         # create Sagemaker endpoint
         sagemaker_endpoint = create_sagemaker_endpoint(
-            self,
-            "MLOpsSagemakerEndpoint",
-            sagemaker_endpoint_config.attr_endpoint_config_name,
-            model_name.value_as_string,
+            scope=self,
+            id="MLOpsSagemakerEndpoint",
+            endpoint_config_name=sagemaker_endpoint_config.attr_endpoint_config_name,
+            endpoint_name=core.Fn.condition_if(
+                endpoint_name_provided.logical_id,
+                endpoint_name.value_as_string,
+                core.Aws.NO_VALUE,
+            ).to_string(),
+            model_name=model_name.value_as_string,
         )
 
         # add dependency on endpoint config

@@ -86,7 +86,7 @@ def batch_transform(
     :batch_inference_data: location of the batch inference data in assets bucket, in the form of
     a CDK CfnParameter object
     :batch_job_output_location: S3 bucket location where the result of the batch job will be stored
-    :kms_key_arn: optionl kmsKeyArn used to encrypt job's output and instance volume.
+    :kms_key_arn: optional kmsKeyArn used to encrypt job's output and instance volume.
     :sm_layer: sagemaker lambda layer
     :return: Lambda function
     """
@@ -149,12 +149,13 @@ def batch_transform(
     return batch_transform_lambda
 
 
-def create_data_baseline_job(
+def create_baseline_job_lambda(
     scope,  # NOSONAR:S107 this function is designed to take many arguments
     blueprint_bucket,
     assets_bucket,
+    monitoring_type,
     baseline_job_name,
-    training_data_location,
+    baseline_data_location,
     baseline_job_output_location,
     endpoint_name,
     instance_type,
@@ -163,28 +164,48 @@ def create_data_baseline_job(
     kms_key_arn,
     kms_key_arn_provided_condition,
     stack_name,
+    sm_layer,
+    problem_type=None,
+    ground_truth_attribute=None,
+    inference_attribute=None,
+    probability_attribute=None,
+    probability_threshold_attribute=None,
 ):
     """
-    create_baseline_job creates a data baseline processing job in a lambda invoked codepipeline action
+    create_baseline_job_lambda creates a data/model baseline processing job in a lambda invoked codepipeline action
 
     :scope: CDK Construct scope that's needed to create CDK resources
     :blueprint_bucket: CDK object of the blueprint bucket that contains resources for BYOM pipeline
     :assets_bucket: the bucket cdk object where pipeline assets are stored
+    :monitoring_type: SageMaker's monitoring type. Currently supported types (DataQualit/ModelQuality)
     :baseline_job_name: name of the baseline job to be created
-    :training_data_location: location of the training data used to train the deployed model
+    :baseline_data_location: location of the baseline data to create the SageMaker Model Monitor baseline
     :baseline_job_output_location: S3 prefix in the S3 assets bucket to store the output of the job
     :endpoint_name: name of the deployed SageMaker endpoint to be monitored
     :instance_type: compute instance type for the baseline job, in the form of a CDK CfnParameter object
     :instance_volume_size: volume size of the EC2 instance
-    :max_runtime_seconds: max time the job is allowd to run
+    :max_runtime_seconds: max time the job is allowed to run
     :kms_key_arn: kms key arn to encrypt the baseline job's output
     :stack_name: model monitor stack name
+    :sm_layer: sagemaker lambda layer
+    :problem_type: used with ModelQuality baseline. Type of Machine Learning problem. Valid values are
+            ['Regression'|'BinaryClassification'|'MulticlassClassification'] (default: None)
+    :ground_truth_attribute: index or JSONpath to locate actual label(s) (used with ModelQuality baseline).
+            (default: None).
+    :inference_attribute: index or JSONpath to locate predicted label(s) (used with ModelQuality baseline).
+        Required for 'Regression'|'MulticlassClassification' problems,
+        and not required for 'BinaryClassification' if 'probability_attribute' and
+        'probability_threshold_attribute' are provided (default: None).
+    :probability_attribute: index or JSONpath to locate probabilities(used with ModelQuality baseline).
+        Used only with 'BinaryClassification' problem if 'inference_attribute' is not provided (default: None).
+    :probability_threshold_attribute: threshold to convert probabilities to binaries (used with ModelQuality baseline).
+        Used only with 'BinaryClassification' problem if 'inference_attribute' is not provided (default: None).
     :return: codepipeline action in a form of a CDK object that can be attached to a codepipeline stage
     """
     s3_read = s3_policy_read(
         [
             f"arn:aws:s3:::{assets_bucket.bucket_name}",
-            f"arn:aws:s3:::{assets_bucket.bucket_name}/{training_data_location}",
+            f"arn:aws:s3:::{assets_bucket.bucket_name}/{baseline_data_location}",
         ]
     )
     s3_write = s3_policy_write(
@@ -194,7 +215,7 @@ def create_data_baseline_job(
     )
 
     create_baseline_job_policy = sagemaker_baseline_job_policy(baseline_job_name)
-    sagemaker_logs_policy = sagemaker_logs_metrics_policy_document(scope, "BaselineLogsMetrcis")
+    sagemaker_logs_policy = sagemaker_logs_metrics_policy_document(scope, "BaselineLogsMetrics")
 
     # Kms Key permissions
     kms_policy = kms_policy_document(scope, "BaselineKmsPolicy", kms_key_arn)
@@ -234,27 +255,43 @@ def create_data_baseline_job(
     add_logs_policy(lambda_role)
 
     # defining the lambda function that gets invoked in this stage
+    # create environment variabes
+    lambda_environment_variables = {
+        "MONITORING_TYPE": monitoring_type,
+        "BASELINE_JOB_NAME": baseline_job_name,
+        "ASSETS_BUCKET": assets_bucket.bucket_name,
+        "SAGEMAKER_ENDPOINT_NAME": endpoint_name,
+        "BASELINE_DATA_LOCATION": baseline_data_location,
+        "BASELINE_JOB_OUTPUT_LOCATION": baseline_job_output_location,
+        "INSTANCE_TYPE": instance_type,
+        "INSTANCE_VOLUME_SIZE": instance_volume_size,
+        "MAX_RUNTIME_SECONDS": max_runtime_seconds,
+        "ROLE_ARN": sagemaker_role.role_arn,
+        "KMS_KEY_ARN": kms_key_arn,
+        "STACK_NAME": stack_name,
+        "LOG_LEVEL": "INFO",
+    }
+
+    # add ModelQuality related variables (they will be passed by the Model Monitor stack)
+    if monitoring_type == "ModelQuality":
+        lambda_environment_variables.update(
+            {
+                "PROBLEM_TYPE": problem_type,
+                "GROUND_TRUTH_ATTRIBUTE": ground_truth_attribute,
+                "INFERENCE_ATTRIBUTE": inference_attribute,
+                "PROBABILITY_ATTRIBUTE": probability_attribute,
+                "PROBABILITY_THRESHOLD_ATTRIBUTE": probability_threshold_attribute,
+            }
+        )
     create_baseline_job_lambda = lambda_.Function(
         scope,
         "create_data_baseline_job",
         runtime=lambda_.Runtime.PYTHON_3_8,
         handler=lambda_handler,
         role=lambda_role,
-        code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_data_baseline_job.zip"),
-        environment={
-            "BASELINE_JOB_NAME": baseline_job_name,
-            "ASSETS_BUCKET": assets_bucket.bucket_name,
-            "SAGEMAKER_ENDPOINT_NAME": endpoint_name,
-            "TRAINING_DATA_LOCATION": training_data_location,
-            "BASELINE_JOB_OUTPUT_LOCATION": baseline_job_output_location,
-            "INSTANCE_TYPE": instance_type,
-            "INSTANCE_VOLUME_SIZE": instance_volume_size,
-            "MAX_RUNTIME_SECONDS": max_runtime_seconds,
-            "ROLE_ARN": sagemaker_role.role_arn,
-            "KMS_KEY_ARN": kms_key_arn,
-            "STACK_NAME": stack_name,
-            "LOG_LEVEL": "INFO",
-        },
+        code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_baseline_job.zip"),
+        layers=[sm_layer],
+        environment=lambda_environment_variables,
         timeout=core.Duration.minutes(10),
     )
 
@@ -273,7 +310,7 @@ def create_stackset_action(
     artifact,
     template_file,
     stage_params_file,
-    accound_ids,
+    account_ids,
     org_ids,
     regions,
     assets_bucket,
@@ -287,11 +324,11 @@ def create_stackset_action(
     :action_name: name of the StackSet action
     :blueprint_bucket: CDK object of the blueprint bucket that contains resources for BYOM pipeline
     :source_output: CDK object of the Source action's output
-    :artifact: name of the input aritifcat to the StackSet action
+    :artifact: name of the input artifact to the StackSet action
     :template_file: name of the Cloudformation template to be deployed
-    :stage_params_file: name of the template parameters for the satge
-    :accound_ids: list of AWS acounts where the stack with be deployed
-    :org_ids: list of AWS orginizational ids where the stack with be deployed
+    :stage_params_file: name of the template parameters for the stage
+    :account_ids: list of AWS accounts where the stack with be deployed
+    :org_ids: list of AWS organizational ids where the stack with be deployed
     :regions: list of regions where the stack with be deployed
     :assets_bucket: the bucket cdk object where pipeline assets are stored
     :stack_name: name of the stack to be deployed
@@ -357,7 +394,7 @@ def create_stackset_action(
             "artifact": artifact,
             "template_file": template_file,
             "stage_params_file": stage_params_file,
-            "accound_ids": accound_ids,
+            "account_ids": account_ids,
             "org_ids": org_ids,
             "regions": regions,
         },
@@ -370,7 +407,7 @@ def create_cloudformation_action(
     scope, action_name, stack_name, source_output, template_file, template_parameters_file, run_order=1
 ):
     """
-    create_cloudformation_actio a CloudFormation action to be added to AWS Codepipeline stage
+    create_cloudformation_action a CloudFormation action to be added to AWS Codepipeline stage
 
     :scope: CDK Construct scope that's needed to create CDK resources
     :action_name: name of the StackSet action
@@ -387,7 +424,7 @@ def create_cloudformation_action(
         stack_name=stack_name,
         capabilities=[cloudformation.CloudFormationCapabilities.NAMED_IAM],
         template_path=source_output.at_path(template_file),
-        # Admin permissions are added to the deployement role used by the CF action for simplicity
+        # Admin permissions are added to the deployment role used by the CF action for simplicity
         # and deploy different resources by different MLOps pipelines. Roles are defined by the
         # pipelines' cloudformation templates.
         admin_permissions=True,
@@ -441,7 +478,7 @@ def create_invoke_lambda_custom_resource(
 
     invoke_lambda_custom_resource = core.CustomResource(
         scope,
-        f"{id}CustomeResource",
+        f"{id}CustomResource",
         service_token=custom_resource_lambda_fn.function_arn,
         properties={
             "function_name": lambda_function_name,
@@ -533,7 +570,7 @@ def create_uuid_custom_resource(scope, create_model_registry, helper_function_ar
         service_token=helper_function_arn,
         # add the template's paramater "create_model_registry" to the custom resource properties
         # so that a new UUID is generated when this value is updated
-        # the generated UUID is appeneded to the name of the model registry to be created
+        # the generated UUID is appended to the name of the model registry to be created
         properties={"Resource": "UUID", "CreateModelRegistry": create_model_registry},
         resource_type="Custom::CreateUUID",
     )

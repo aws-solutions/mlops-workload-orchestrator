@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -44,7 +44,7 @@ def create_sagemaker_endpoint_config(
             "destinationS3Uri": f"s3://{data_capture_location}",
             "captureOptions": [{"captureMode": "Output"}, {"captureMode": "Input"}],
             "captureContentTypeHeader": {"csvContentTypes": ["text/csv"]},
-            # The key specfied here is used to encrypt data on S3 captured by the endpoint. If you don't provide
+            # The key specified here is used to encrypt data on S3 captured by the endpoint. If you don't provide
             # a KMS key ID, Amazon SageMaker uses the default KMS key for Amazon S3 for your role's account.
             # for more info see DataCaptureConfig
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-sagemaker-endpointconfig.html

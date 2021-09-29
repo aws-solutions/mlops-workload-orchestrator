@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -11,17 +11,10 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 import pytest
-from shared.helper import get_built_in_model_monitor_container_uri, get_client, reset_client
+from shared.helper import get_client, reset_client
 
 
 _helpers_service_clients = dict()
-
-
-def test_get_built_in_model_monitor_container_uri():
-    assert (
-        get_built_in_model_monitor_container_uri("us-east-1")
-        == "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer:latest"
-    )
 
 
 @pytest.mark.parametrize("service,enpoint_url", [("s3", "https://s3"), ("cloudformation", "https://cloudformation")])

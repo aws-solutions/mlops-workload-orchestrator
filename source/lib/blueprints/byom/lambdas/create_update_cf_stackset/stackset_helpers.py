@@ -42,7 +42,7 @@ def find_artifact(artifacts, name):
         if artifact["name"] == name:
             return artifact
 
-    raise Exception(f"Input artifact named {name} not found in lambda's event")
+    raise ValueError(f"Input artifact named {name} not found in lambda's event")
 
 
 def get_template(s3_client, artifact, template_file_in_zip, params_file_in_zip):
@@ -377,14 +377,14 @@ def validate_user_params(decoded_params, list_of_required_params):
 
     Args:
         decoded_params: json object of user parameters passed via codepipline's event
-        list_of_required_params: list of reqyured parameters
+        list_of_required_params: list of required parameters
 
     Raises:
         Your UserParameters JSON must include <missing parameter's name>
     """
     for param in list_of_required_params:
         if param not in decoded_params:
-            raise Exception(f"Your UserParameters JSON must include {param}")
+            raise ValueError(f"Your UserParameters JSON must include {param}")
 
 
 def get_user_params(job_data):
@@ -405,13 +405,13 @@ def get_user_params(job_data):
         "artifact",
         "template_file",
         "stage_params_file",
-        "accound_ids",
+        "account_ids",
         "org_ids",
         "regions",
     ]
     try:
         # Get the user parameters which contain the stackset_name, artifact, template_name,
-        # stage_params, accound_ids, org_ids, and regions
+        # stage_params, account_ids, org_ids, and regions
         user_parameters = job_data["actionConfiguration"]["configuration"]["UserParameters"]
         decoded_parameters = json.loads(user_parameters)
 
@@ -419,7 +419,7 @@ def get_user_params(job_data):
         # We're expecting the user parameters to be encoded as JSON
         # so we can pass multiple values. If the JSON can't be decoded
         # then fail the job with a helpful message.
-        raise Exception("UserParameters could not be decoded as JSON", e)
+        raise ValueError("UserParameters could not be decoded as JSON", e)
 
     # Validate required params were provided
     validate_user_params(

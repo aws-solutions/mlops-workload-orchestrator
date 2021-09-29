@@ -15,12 +15,13 @@ from aws_cdk import (
 )
 
 
-def create_sagemaker_endpoint(scope, id, endpoint_config_name, model_name, **kwargs):
+def create_sagemaker_endpoint(scope, id, endpoint_config_name, endpoint_name, model_name, **kwargs):
     # create Sagemaker endpoint
     sagemaker_endpoint = sagemaker.CfnEndpoint(
         scope,
         id,
         endpoint_config_name=endpoint_config_name,
+        endpoint_name=endpoint_name,
         tags=[{"key": "endpoint-name", "value": f"{model_name}-endpoint"}],
         **kwargs,
     )

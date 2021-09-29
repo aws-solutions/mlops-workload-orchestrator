@@ -31,18 +31,8 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_lambda_policies,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
-    create_notification_email_parameter,
-    create_git_address_parameter,
-    create_existing_bucket_parameter,
-    create_existing_ecr_repo_parameter,
-    create_git_address_provided_condition,
-    create_existing_bucket_provided_condition,
-    create_existing_ecr_provided_condition,
-    create_new_bucket_condition,
-    create_new_ecr_repo_condition,
-    create_use_model_registry_parameter,
-    create_model_registry_parameter,
-    create_model_registry_condition,
+    ParameteresFactory as pf,
+    ConditionsFactory as cf,
 )
 from lib.blueprints.byom.pipeline_definitions.deploy_actions import (
     sagemaker_layer,
@@ -52,7 +42,7 @@ from lib.blueprints.byom.pipeline_definitions.deploy_actions import (
     create_copy_assets_lambda,
 )
 from lib.blueprints.byom.pipeline_definitions.iam_policies import (
-    create_inovoke_lambda_policy,
+    create_invoke_lambda_policy,
     create_orchestrator_policy,
 )
 from lib.blueprints.byom.pipeline_definitions.configure_multi_account import (
@@ -67,34 +57,34 @@ class MLOpsStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Get stack parameters:
-        notification_email = create_notification_email_parameter(self)
-        git_address = create_git_address_parameter(self)
+        notification_email = pf.create_notification_email_parameter(self)
+        git_address = pf.create_git_address_parameter(self)
         # Get the optional S3 assets bucket to use
-        existing_bucket = create_existing_bucket_parameter(self)
+        existing_bucket = pf.create_existing_bucket_parameter(self)
         # Get the optional S3 assets bucket to use
-        existing_ecr_repo = create_existing_ecr_repo_parameter(self)
+        existing_ecr_repo = pf.create_existing_ecr_repo_parameter(self)
         # Will SageMaker's Model Registry be used to provision models
-        use_model_registry = create_use_model_registry_parameter(self)
+        use_model_registry = pf.create_use_model_registry_parameter(self)
         # Does the user want the solution to create model registry
-        create_model_registry = create_model_registry_parameter(self)
+        create_model_registry = pf.create_model_registry_parameter(self)
 
         # Conditions
-        git_address_provided = create_git_address_provided_condition(self, git_address)
+        git_address_provided = cf.create_git_address_provided_condition(self, git_address)
 
         # client provided an existing S3 bucket name, to be used for assets
-        existing_bucket_provided = create_existing_bucket_provided_condition(self, existing_bucket)
+        existing_bucket_provided = cf.create_existing_bucket_provided_condition(self, existing_bucket)
 
         # client provided an existing Amazon ECR name
-        existing_ecr_provided = create_existing_ecr_provided_condition(self, existing_ecr_repo)
+        existing_ecr_provided = cf.create_existing_ecr_provided_condition(self, existing_ecr_repo)
 
         # client wants the solution to create model registry
-        model_registry_condition = create_model_registry_condition(self, create_model_registry)
+        model_registry_condition = cf.create_model_registry_condition(self, create_model_registry)
 
         # S3 bucket needs to be created for assets
-        create_new_bucket = create_new_bucket_condition(self, existing_bucket)
+        create_new_bucket = cf.create_new_bucket_condition(self, existing_bucket)
 
         # Amazon ECR repo needs too be created for custom Algorithms
-        create_new_ecr_repo = create_new_ecr_repo_condition(self, existing_ecr_repo)
+        create_new_ecr_repo = cf.create_new_ecr_repo_condition(self, existing_ecr_repo)
 
         # Constants
         pipeline_stack_name = "mlops-pipeline"
@@ -259,7 +249,7 @@ class MLOpsStack(core.Stack):
             },
         )
 
-        # add lambda supressions
+        # add lambda suppressions
         provisioner_apigw_lambda.lambda_function.node.default_child.cfn_options.metadata = suppress_lambda_policies()
 
         provision_resource = provisioner_apigw_lambda.api_gateway.root.add_resource("provisionpipeline")
@@ -370,10 +360,10 @@ class MLOpsStack(core.Stack):
             cross_account_keys=False,
         )
         codecommit_pipeline.add_to_role_policy(
-            create_inovoke_lambda_policy([provisioner_apigw_lambda.lambda_function.function_arn])
+            create_invoke_lambda_policy([provisioner_apigw_lambda.lambda_function.function_arn])
         )
         codebuild_project.add_to_role_policy(
-            create_inovoke_lambda_policy([provisioner_apigw_lambda.lambda_function.function_arn])
+            create_invoke_lambda_policy([provisioner_apigw_lambda.lambda_function.function_arn])
         )
         pipeline_child_nodes = codecommit_pipeline.node.find_all()
         pipeline_child_nodes[1].node.default_child.cfn_options.metadata = {
@@ -425,7 +415,23 @@ class MLOpsStack(core.Stack):
             },
         }
 
+        # configure mutli-account parameters and permissions
+        is_delegated_admin = None
+        if multi_account:
+            paramaters_list, paramaters_labels, is_delegated_admin = configure_multi_account_parameters_permissions(
+                self,
+                assets_bucket,
+                blueprint_repository_bucket,
+                ecr_repo,
+                model_registry,
+                provisioner_apigw_lambda.lambda_function,
+                paramaters_list,
+                paramaters_labels,
+            )
+
         # properties of send data custom resource
+        # if you add new metrics to the cr properties, make sure to updated the allowed keys
+        # to send in the "_sanitize_data" function in source/lambdas/solution_helper/lambda_function.py
         send_data_cr_properties = {
             "Resource": "AnonymousMetric",
             "UUID": create_id_function.get_att_string("UUID"),
@@ -441,28 +447,11 @@ class MLOpsStack(core.Stack):
             ).to_string(),
             "Region": core.Aws.REGION,
             "IsMultiAccount": str(multi_account),
+            "IsDelegatedAccount": is_delegated_admin if multi_account else core.Aws.NO_VALUE,
             "UseModelRegistry": use_model_registry.value_as_string,
             "SolutionId": get_cdk_context_value(self, "SolutionId"),
             "Version": get_cdk_context_value(self, "Version"),
         }
-
-        # configure mutli-account parameters and permissions
-        if multi_account:
-            (
-                paramaters_list,
-                paramaters_labels,
-                send_data_cr_properties,
-            ) = configure_multi_account_parameters_permissions(
-                self,
-                assets_bucket,
-                blueprint_repository_bucket,
-                ecr_repo,
-                model_registry,
-                provisioner_apigw_lambda.lambda_function,
-                paramaters_list,
-                paramaters_labels,
-                send_data_cr_properties,
-            )
 
         # create send data custom resource
         send_data_function = create_send_data_custom_resource(

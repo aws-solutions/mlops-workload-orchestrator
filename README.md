@@ -16,7 +16,7 @@ pipeline for building and registering Docker images for custom algorithms that c
 deployment on an [Amazon SageMaker](https://aws.amazon.com/sagemaker/) endpoint.
 
 You can use batch and real-time data inferences to configure the pipeline for your business context.
-You can also provision multiple Model Monitor pipelines to periodically monitor the quality of deployed
+You can also provision multiple data quality and model quality Monitor pipelines to periodically monitor the quality of deployed
 Amazon SageMaker ML models. This solution increases your team’s agility and efficiency by allowing them
 to repeat successful processes at scale.
 
@@ -119,7 +119,7 @@ chmod +x ./build-s3-dist.sh
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET $SOLUTION_NAME $VERSION
 ```
 
-- Upload the distributable assets to your Amazon S3 bucket in your account. Note: Ensure that you own the Amazon S3 bucket before uploading the assets. To upload the assets to the S3 bucket, you can use the AWS Console or the AWS CLI as shown below.
+- Upload the distributable assets to your Amazon S3 bucket in your account. Note: ensure that you own the Amazon S3 bucket before uploading the assets. To upload the assets to the S3 bucket, you can use the AWS Console or the AWS CLI as shown below.
 
 ```
 aws s3 cp ./global-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-framework/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name

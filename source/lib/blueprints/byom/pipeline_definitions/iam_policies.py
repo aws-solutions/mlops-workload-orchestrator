@@ -1,5 +1,5 @@
 # #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -17,34 +17,41 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_delegated_admin_policy,
 )
 
+sagemaker_arn_prefix = f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}"
 
-def sagemaker_policiy_statement():
+
+def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_name_provided):
+    actions = ["sagemaker:CreateModel", "sagemaker:DescribeModel", "sagemaker:DeleteModel"]
+    resources = [f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*"]
+
+    if is_realtime_pipeline:
+        # extend actions
+        actions.extend(
+            [
+                "sagemaker:CreateEndpointConfig",
+                "sagemaker:DescribeEndpointConfig",
+                "sagemaker:DeleteEndpointConfig",
+                "sagemaker:CreateEndpoint",
+                "sagemaker:DescribeEndpoint",
+                "sagemaker:DeleteEndpoint",
+            ]
+        )
+
+        # if a custom endpoint_name is provided, use it. Otherwise, use the generated name
+        endpoint = core.Fn.condition_if(
+            endpoint_name_provided.logical_id, endpoint_name.value_as_string, "mlopssagemakerendpoint*"
+        ).to_string()
+
+        # extend resources and add
+        resources.extend(
+            [
+                f"{sagemaker_arn_prefix}:endpoint-config/mlopssagemakerendpointconfig*",
+                f"{sagemaker_arn_prefix}:endpoint/{endpoint}",
+            ]
+        )
     return iam.PolicyStatement(
-        actions=[
-            "sagemaker:CreateModel",  # NOSONAR: permission needs to be repeated for clarity
-            "sagemaker:DescribeModel",
-            "sagemaker:DeleteModel",
-            "sagemaker:CreateEndpointConfig",
-            "sagemaker:DescribeEndpointConfig",
-            "sagemaker:DeleteEndpointConfig",
-            "sagemaker:CreateEndpoint",
-            "sagemaker:DescribeEndpoint",
-            "sagemaker:DeleteEndpoint",
-        ],
-        resources=[
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:model/"
-                f"mlopssagemakermodel*"
-            ),
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:endpoint-config/"
-                f"mlopssagemakerendpointconfig*"
-            ),
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:endpoint/"
-                f"mlopssagemakerendpoint*"
-            ),
-        ],
+        actions=actions,
+        resources=resources,
     )
 
 
@@ -56,12 +63,7 @@ def sagemaker_baseline_job_policy(baseline_job_name):
             "sagemaker:StopProcessingJob",
             "sagemaker:DeleteProcessingJob",
         ],
-        resources=[
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:"
-                f"processing-job/{baseline_job_name}"
-            ),
-        ],
+        resources=[f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}"],
     )
 
 
@@ -70,12 +72,7 @@ def batch_transform_policy():
         actions=[
             "sagemaker:CreateTransformJob",
         ],
-        resources=[
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:"
-                f"transform-job/mlopssagemakermodel-*-batch-transform-*"
-            ),
-        ],
+        resources=[f"{sagemaker_arn_prefix}:transform-job/mlopssagemakermodel-*-batch-transform-*"],
     )
 
 
@@ -88,7 +85,7 @@ def create_service_role(scope, id, service, description):
     )
 
 
-def sagemaker_monitor_policiy_statement(baseline_job_name, monitoring_schedual_name):
+def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_name, endpoint_name):
     return iam.PolicyStatement(
         actions=[
             "sagemaker:DescribeEndpointConfig",
@@ -98,24 +95,20 @@ def sagemaker_monitor_policiy_statement(baseline_job_name, monitoring_schedual_n
             "sagemaker:StopMonitoringSchedule",
             "sagemaker:DeleteMonitoringSchedule",
             "sagemaker:DescribeProcessingJob",
+            "sagemaker:CreateDataQualityJobDefinition",
+            "sagemaker:DescribeDataQualityJobDefinition",
+            "sagemaker:DeleteDataQualityJobDefinition",
+            "sagemaker:CreateModelQualityJobDefinition",
+            "sagemaker:DescribeModelQualityJobDefinition",
+            "sagemaker:DeleteModelQualityJobDefinition",
         ],
         resources=[
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:endpoint-config/"
-                f"mlopssagemakerendpointconfig*"
-            ),
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:endpoint/"
-                f"mlopssagemakerendpoint*"
-            ),
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:"
-                f"monitoring-schedule/{monitoring_schedual_name}"
-            ),
-            (
-                f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:"
-                f"processing-job/{baseline_job_name}"
-            ),
+            f"{sagemaker_arn_prefix}:endpoint-config/mlopssagemakerendpointconfig*",
+            f"{sagemaker_arn_prefix}:endpoint/{endpoint_name}",
+            f"{sagemaker_arn_prefix}:monitoring-schedule/{monitoring_schedule_name}",
+            f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}",
+            f"{sagemaker_arn_prefix}:data-quality-job-definition/*",
+            f"{sagemaker_arn_prefix}:model-quality-job-definition/*",
         ],
     )
 
@@ -126,7 +119,7 @@ def sagemaker_tags_policy_statement():
             "sagemaker:AddTags",
             "sagemaker:DeleteTags",
         ],
-        resources=[f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:*"],
+        resources=[f"{sagemaker_arn_prefix}:*"],
     )
 
 
@@ -283,8 +276,8 @@ def get_model_registry_actions_resources(model_package_group_name):
     ]
 
     resources = [
-        f"arn:aws:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:model-package-group/{model_package_group_name}",
-        f"arn:aws:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:model-package/{model_package_group_name}/*",
+        f"{sagemaker_arn_prefix}:model-package-group/{model_package_group_name}",
+        f"{sagemaker_arn_prefix}:model-package/{model_package_group_name}/*",
     ]
 
     return (actions, resources)
@@ -442,7 +435,7 @@ def create_orchestrator_policy(
                         f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:"
                         f"{core.Aws.ACCOUNT_ID}:project/VerifySagemaker*"
                     ),
-                    (f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:" f"{core.Aws.ACCOUNT_ID}:report-group/*"),
+                    f"arn:{core.Aws.PARTITION}:codebuild:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:report-group/*",
                 ],
             ),
             iam.PolicyStatement(
@@ -562,7 +555,7 @@ def create_orchestrator_policy(
     )
 
 
-def create_inovoke_lambda_policy(lambda_functions_list):
+def create_invoke_lambda_policy(lambda_functions_list):
     return iam.PolicyStatement(
         actions=["lambda:InvokeFunction"],  # NOSONAR: permission needs to be repeated for clarity
         resources=lambda_functions_list,

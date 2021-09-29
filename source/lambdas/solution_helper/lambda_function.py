@@ -21,6 +21,18 @@ helper = CfnResource(json_logging=True, log_level="INFO")
 
 
 def _sanitize_data(resource_properties):
+    # Define allowed keys. You need to update this list with new metrics
+    main_keys = [
+        "bucketSelected",
+        "gitSelected",
+        "Region",
+        "IsMultiAccount",
+        "UseModelRegistry",
+        "Version",
+    ]
+    optional_keys = ["IsDelegatedAccount"]
+    allowed_keys = main_keys + optional_keys
+
     # Remove ServiceToken (lambda arn) to avoid sending AccountId
     resource_properties.pop("ServiceToken", None)
     resource_properties.pop("Resource", None)
@@ -29,7 +41,37 @@ def _sanitize_data(resource_properties):
     resource_properties.pop("SolutionId", None)
     resource_properties.pop("UUID", None)
 
-    return resource_properties
+    # send only allowed metrics
+    sanitized_data = {key: resource_properties[key] for key in allowed_keys if key in resource_properties}
+
+    return sanitized_data
+
+
+def _send_anonymous_metrics(request_type, resource_properties):
+    try:
+        metrics_data = _sanitize_data(copy(resource_properties))
+        metrics_data["RequestType"] = request_type
+
+        headers = {"Content-Type": "application/json"}
+
+        # create the payload
+        payload = {
+            "Solution": resource_properties["SolutionId"],
+            "UUID": resource_properties["UUID"],
+            "TimeStamp": datetime.utcnow().isoformat(),
+            "Data": metrics_data,
+        }
+
+        logger.info(f"Sending payload: {payload}")
+        response = requests.post("https://metrics.awssolutionsbuilder.com/generic", json=payload, headers=headers)
+        # log the response
+        logger.info(f"Response from the metrics endpoint: {response.status_code} {response.reason}")
+        # raise error if response is an 404, 503, 500, 403 etc.
+        response.raise_for_status()
+        return response
+    except Exception as e:
+        logger.exception(f"Error when trying to send anonymous_metrics: {str(e)}")
+        return None
 
 
 @helper.create
@@ -44,25 +86,8 @@ def custom_resource(event, _):
         random_id = str(uuid.uuid4())
         helper.Data.update({"UUID": random_id})
     elif resource == "AnonymousMetric":
-        try:
-            metrics_data = _sanitize_data(copy(resource_properties))
-            metrics_data["RequestType"] = request_type
-
-            headers = {"Content-Type": "application/json"}
-
-            # create the payload
-            payload = {
-                "Solution": resource_properties["SolutionId"],
-                "UUID": resource_properties["UUID"],
-                "TimeStamp": datetime.utcnow().isoformat(),
-                "Data": metrics_data,
-            }
-
-            logger.info(f"Sending payload: {payload}")
-            response = requests.post("https://metrics.awssolutionsbuilder.com/generic", json=payload, headers=headers)
-            logger.info(f"Response from metrics endpoint: {response.status_code} {response.reason}")
-        except Exception as e:
-            logger.exception(f"Error when trying to send usage data: {str(e)}")
+        # send Anonymous Metrics to AWS
+        _send_anonymous_metrics(request_type, resource_properties)
 
 
 def handler(event, context):
