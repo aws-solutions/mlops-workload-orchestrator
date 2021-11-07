@@ -79,3 +79,5 @@ def test_custom_resource(mocked_copy, event, mocked_response):
     mocked_copy.side_effect = Exception("mocked error")
     with pytest.raises(Exception):
         custom_resource(event, {})
+
+
