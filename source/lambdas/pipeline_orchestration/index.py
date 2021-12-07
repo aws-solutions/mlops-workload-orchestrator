@@ -93,7 +93,7 @@ def provision_pipeline(
     # if the pipeline to provision is byom_image_builder
     if pipeline_type == "byom_image_builder":
         image_builder_params = get_image_builder_params(validated_event)
-        # format the params (the format is the same for multi-accouunt parameters)
+        # format the params (the format is the same for multi-account parameters)
         formatted_image_builder_params = format_template_parameters(image_builder_params, "True")
         # create the codepipeline
         stack_response = create_codepipeline_stack(
@@ -140,7 +140,7 @@ def provision_pipeline(
         "isBase64Encoded": False,
         "body": json.dumps(
             {
-                "message": "success: stack creation started",
+                "message": stack_response["message"],
                 "pipeline_id": stack_response["StackId"],
             }
         ),
@@ -154,6 +154,7 @@ def update_stack(
     pipeline_template_url: str,
     template_parameters: List[Dict[str, str]],
     client: BaseClient,
+    stack_id: str,
 ) -> Dict[str, str]:
     try:
         update_response = client.update_stack(
@@ -169,13 +170,14 @@ def update_stack(
 
         logger.info(update_response)
 
-        return {"StackId": f"Pipeline {codepipeline_stack_name} is being updated."}
+        return {"StackId": stack_id, "message": f"Pipeline {codepipeline_stack_name} is being updated."}
 
     except Exception as e:
         logger.info(f"Error during stack update {codepipeline_stack_name}: {str(e)}")
         if "No updates are to be performed" in str(e):
             return {
-                "StackId": f"Pipeline {codepipeline_stack_name} is already provisioned. No updates are to be performed."
+                "StackId": stack_id,
+                "message": f"Pipeline {codepipeline_stack_name} is already provisioned. No updates are to be performed.",
             }
         else:
             raise e
@@ -201,18 +203,23 @@ def create_codepipeline_stack(
         )
 
         logger.info(stack_response)
-        return stack_response
+        return {"StackId": stack_response["StackId"], "message": "success: stack creation started"}
 
     except Exception as e:
-        logger.error(f"Error in create_update_cf_stackset lambda functions: {str(e)}")
+        logger.error(f"Error in create_codepipeline_stack: {str(e)}")
         if "already exists" in str(e):
             logger.info(f"AWS Codepipeline {codepipeline_stack_name} already exists. Skipping codepipeline create")
+            # get the stack id using stack-name
+            stack_id = client.describe_stacks(StackName=codepipeline_stack_name)["Stacks"][0]["StackId"]
             # if the pipeline to update is BYOMPipelineImageBuilder
             if codepipeline_stack_name.endswith("byompipelineimagebuilder"):
-                return update_stack(codepipeline_stack_name, pipeline_template_url, template_parameters, client)
+                return update_stack(
+                    codepipeline_stack_name, pipeline_template_url, template_parameters, client, stack_id
+                )
 
             return {
-                "StackId": f"Pipeline {codepipeline_stack_name} is already provisioned. Updating template parameters."
+                "StackId": stack_id,
+                "message": f"Pipeline {codepipeline_stack_name} is already provisioned. Updating template parameters.",
             }
         else:
             raise e

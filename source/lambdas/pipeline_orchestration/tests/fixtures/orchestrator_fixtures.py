@@ -273,6 +273,11 @@ def stack_name():
 
 
 @pytest.fixture
+def stack_id():
+    return "fake-stack-id"
+
+
+@pytest.fixture
 def expected_multi_account_params_format():
     return [
         {"ParameterKey": "NotificationEmail", "ParameterValue": os.environ["NOTIFICATION_EMAIL"]},
@@ -690,5 +695,8 @@ def cf_client_params(api_byom_event, template_parameters_realtime_builtin):
 
 
 @pytest.fixture
-def expected_update_response(stack_name):
-    return {"StackId": f"Pipeline {stack_name} is already provisioned. No updates are to be performed."}
+def expected_update_response(stack_name, stack_id):
+    return {
+        "StackId": stack_id,
+        "message": f"Pipeline {stack_name} is already provisioned. No updates are to be performed.",
+    }

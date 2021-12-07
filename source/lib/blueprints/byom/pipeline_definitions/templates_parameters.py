@@ -22,7 +22,7 @@ class ParameteresFactory:
             type="String",
             description="email for pipeline outcome notifications",
             allowed_pattern="^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$",
-            constraint_description="Please enter an email address with correct format (example@exmaple.com)",
+            constraint_description="Please enter an email address with correct format (example@example.com)",
             min_length=5,
             max_length=320,
         )
@@ -422,6 +422,17 @@ class ParameteresFactory:
             allowed_values=["Yes", "No"],
             default="Yes",
             description="Is a delegated administrator account used to deploy accross account",
+        )
+
+    @staticmethod
+    def create_detailed_error_message_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AllowDetailedErrorMessage",
+            type="String",
+            allowed_values=["Yes", "No"],
+            default="Yes",
+            description="Allow including a detailed message of any server-side errors in the API call's response",
         )
 
     @staticmethod
