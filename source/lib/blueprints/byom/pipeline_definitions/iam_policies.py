@@ -385,6 +385,7 @@ def create_orchestrator_policy(
                     "cloudformation:CreateStack",
                     "cloudformation:DeleteStack",
                     "cloudformation:UpdateStack",
+                    "cloudformation:DescribeStacks",
                     "cloudformation:ListStackResources",
                 ],
                 resources=[

@@ -12,17 +12,36 @@
 # #####################################################################################################################
 import json
 import sys
+import os
 import traceback
 from functools import wraps
-import boto3
+import botocore
 from shared.logger import get_logger
-from shared.helper import get_client
 
 logger = get_logger(__name__)
+endable_detailed_error_message = os.getenv("ALLOW_DETAILED_ERROR_MESSAGE", "Yes")
 
 
 class BadRequest(Exception):
     pass
+
+
+def handle_exception(error_description, error_object, status_code):
+    # log the error
+    logger.error(f"{error_description}. Error: {str(error_object)}")
+    exc_type, exc_value, exc_tb = sys.exc_info()
+    logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
+    # update the response body
+    body = {"message": error_description}
+    if endable_detailed_error_message == "Yes":
+        body.update({"detailedMessage": str(error_object)})
+
+    return {
+        "statusCode": status_code,
+        "isBase64Encoded": False,
+        "body": json.dumps(body),
+        "headers": {"Content-Type": "plain/text"},
+    }
 
 
 def api_exception_handler(f):
@@ -30,24 +49,15 @@ def api_exception_handler(f):
     def wrapper(event, context):
         try:
             return f(event, context)
-        except BadRequest as e:
-            logger.error(f"A BadRequest exception occurred, exception message: {str(e)}")
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
-            return {
-                "statusCode": 400,
-                "isBase64Encoded": False,
-                "body": json.dumps({"message": str(e)}),
-                "headers": {"Content-Type": "plain/text"},
-            }
-        except:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
-            return {
-                "statusCode": 500,
-                "isBase64Encoded": False,
-                "body": json.dumps({"message": "Internal server error. See logs for more information."}),
-                "headers": {"Content-Type": "plain/text"},
-            }
+
+        except BadRequest as bad_request_error:
+            return handle_exception("A BadRequest exception occurred", bad_request_error, 400)
+
+        except botocore.exceptions.ClientError as client_error:
+            status_code = client_error.response["ResponseMetadata"]["HTTPStatusCode"]
+            return handle_exception("A boto3 ClientError occurred", client_error, status_code)
+
+        except Exception as e:
+            return handle_exception("An Unexpected Server side exception occurred", e, 500)
 
     return wrapper
