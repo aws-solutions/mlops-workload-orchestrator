@@ -28,7 +28,7 @@
 set -e
 
 # Important: CDK global version number
-cdk_version=1.117.0
+cdk_version=1.126.0
 
 # Check to see if the required parameters have been provided:
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then

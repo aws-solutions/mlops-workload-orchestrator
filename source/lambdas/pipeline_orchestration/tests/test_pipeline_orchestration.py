@@ -19,6 +19,7 @@ import pytest
 from unittest.mock import patch
 from unittest import TestCase
 import botocore.session
+from botocore.exceptions import ClientError
 from botocore.stub import Stubber
 from moto import mock_s3
 from pipeline_orchestration.lambda_helpers import (
@@ -59,6 +60,7 @@ from tests.fixtures.orchestrator_fixtures import (
     expected_realtime_specific_params,
     expected_batch_specific_params,
     stack_name,
+    stack_id,
     api_data_quality_event,
     api_model_quality_event,
     expected_update_response,
@@ -91,6 +93,7 @@ content_type = "plain/text"
 
 
 def test_handler():
+    # event["path"] == "/provisionpipeline"
     with patch("pipeline_orchestration.index.provision_pipeline") as mock_provision_pipeline:
         event = {
             "httpMethod": "POST",
@@ -108,13 +111,14 @@ def test_handler():
 
         event = {"should_return": "bad_request"}
         response = handler(event, {})
+
         assert response == {
             "statusCode": 400,
             "isBase64Encoded": False,
             "body": json.dumps(
                 {
-                    "message": "Bad request format. Expected httpMethod or pipeline_type, received none. "
-                    + "Check documentation for API & config formats."
+                    "message": "A BadRequest exception occurred",
+                    "detailedMessage": "Bad request format. Expected httpMethod or pipeline_type, received none. Check documentation for API & config formats.",
                 }
             ),
             "headers": {"Content-Type": content_type},
@@ -130,11 +134,15 @@ def test_handler():
             "statusCode": 400,
             "isBase64Encoded": False,
             "body": json.dumps(
-                {"message": "Unacceptable event path. Path must be /provisionpipeline or /pipelinestatus"}
+                {
+                    "message": "A BadRequest exception occurred",
+                    "detailedMessage": "Unacceptable event path. Path must be /provisionpipeline or /pipelinestatus",
+                }
             ),
             "headers": {"Content-Type": content_type},
         }
 
+    # test event["path"] == "/pipelinestatus"
     with patch("pipeline_orchestration.index.pipeline_status") as mock_pipeline_status:
         event = {
             "httpMethod": "POST",
@@ -144,14 +152,41 @@ def test_handler():
         handler(event, {})
         mock_pipeline_status.assert_called_with(json.loads(event["body"]))
 
-        # test the returned response "statusCode": 500
-        mock_pipeline_status.side_effect = Exception()
+        # test for client error exception
+        mock_pipeline_status.side_effect = ClientError(
+            {
+                "Error": {"Code": "500", "Message": "Some error message"},
+                "ResponseMetadata": {"HTTPStatusCode": 400},
+            },
+            "test",
+        )
+        response = handler(event, {})
+        assert response == {
+            "statusCode": 400,
+            "isBase64Encoded": False,
+            "body": json.dumps(
+                {
+                    "message": "A boto3 ClientError occurred",
+                    "detailedMessage": "An error occurred (500) when calling the test operation: Some error message",
+                }
+            ),
+            "headers": {"Content-Type": content_type},
+        }
+
+        # test for other exceptions
+        message = "An Unexpected Server side exception occurred"
+        mock_pipeline_status.side_effect = Exception(message)
         response = handler(event, {})
         assert response == {
             "statusCode": 500,
             "isBase64Encoded": False,
-            "body": json.dumps({"message": "Internal server error. See logs for more information."}),
-            "headers": {"Content-Type": "plain/text"},
+            "body": json.dumps(
+                {
+                    "message": message,
+                    "detailedMessage": message,
+                }
+            ),
+            "headers": {"Content-Type": content_type},
         }
 
 
@@ -215,12 +250,12 @@ def test_download_file_from_s3():
     download_file_from_s3("assetsbucket", os.environ["TESTFILE"], testfile.name, s3_client)
 
 
-def test_create_codepipeline_stack(cf_client_params, stack_name, expected_update_response):
+def test_create_codepipeline_stack(cf_client_params, stack_name, stack_id, expected_update_response):
     cf_client = botocore.session.get_session().create_client("cloudformation")
     not_image_stack = "teststack-testmodel-BYOMPipelineReatimeBuiltIn"
     stubber = Stubber(cf_client)
     expected_params = cf_client_params
-    cfn_response = {"StackId": "1234"}
+    cfn_response = {"StackId": stack_id}
 
     stubber.add_response("create_stack", cfn_response, expected_params)
     with stubber:
@@ -243,7 +278,22 @@ def test_create_codepipeline_stack(cf_client_params, stack_name, expected_update
                 cf_client,
             )
     stubber.add_client_error("create_stack", service_message="already exists")
-    expected_response = {"StackId": f"Pipeline {not_image_stack} is already provisioned. Updating template parameters."}
+    expected_response = {
+        "StackId": stack_id,
+        "message": f"Pipeline {not_image_stack} is already provisioned. Updating template parameters.",
+    }
+    describe_expected_params = {"StackName": not_image_stack}
+    describe_cfn_response = {
+        "Stacks": [
+            {
+                "StackId": stack_id,
+                "StackName": not_image_stack,
+                "CreationTime": "2021-11-03T00:23:37.630000+00:00",
+                "StackStatus": "CREATE_COMPLETE",
+            }
+        ]
+    }
+    stubber.add_response("describe_stacks", describe_cfn_response, describe_expected_params)
     with stubber:
         response = create_codepipeline_stack(
             not_image_stack,
@@ -255,50 +305,43 @@ def test_create_codepipeline_stack(cf_client_params, stack_name, expected_update
         assert response == expected_response
 
     # Test if the stack is image builder
+    describe_expected_params["StackName"] = stack_name
+    describe_cfn_response["Stacks"][0]["StackName"] = stack_name
     stubber.add_client_error("create_stack", service_message="already exists")
+    stubber.add_response("describe_stacks", describe_cfn_response, describe_expected_params)
     stubber.add_client_error("update_stack", service_message="No updates are to be performed")
     expected_response = expected_update_response
     with stubber:
         response = create_codepipeline_stack(
-            stack_name,
-            expected_params["TemplateURL"],
-            expected_params["Parameters"],
-            cf_client,
+            stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client
         )
 
         assert response == expected_response
 
 
-def test_update_stack(cf_client_params, stack_name, expected_update_response):
+def test_update_stack(cf_client_params, stack_name, stack_id, expected_update_response):
     cf_client = botocore.session.get_session().create_client("cloudformation")
-
     expected_params = cf_client_params
     stubber = Stubber(cf_client)
     expected_params["StackName"] = stack_name
     expected_params["Tags"] = [{"Key": "stack_name", "Value": stack_name}]
     del expected_params["OnFailure"]
-    cfn_response = {"StackId": f"Pipeline {stack_name} is being updated."}
+    cfn_response = {"StackId": stack_id}
 
     stubber.add_response("update_stack", cfn_response, expected_params)
 
     with stubber:
         response = update_stack(
-            stack_name,
-            expected_params["TemplateURL"],
-            expected_params["Parameters"],
-            cf_client,
+            stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client, stack_id
         )
-        assert response == cfn_response
+        assert response == {**cfn_response, "message": f"Pipeline {stack_name} is being updated."}
 
     # Test for no update error
     stubber.add_client_error("update_stack", service_message="No updates are to be performed")
     expected_response = expected_update_response
     with stubber:
         response = update_stack(
-            stack_name,
-            expected_params["TemplateURL"],
-            expected_params["Parameters"],
-            cf_client,
+            stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client, stack_id
         )
         assert response == expected_response
 
@@ -306,12 +349,7 @@ def test_update_stack(cf_client_params, stack_name, expected_update_response):
     stubber.add_client_error("update_stack", service_message="Some Exception")
     with stubber:
         with pytest.raises(Exception):
-            update_stack(
-                stack_name,
-                expected_params["TemplateURL"],
-                expected_params["Parameters"],
-                cf_client,
-            )
+            update_stack(stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client, stack_id)
 
 
 def test_pipeline_status():
@@ -610,7 +648,9 @@ def test_get_model_monitor_params(
     expected_data_quality_monitor_params,
     expected_model_quality_monitor_params,
 ):
-    # provide an actual Model Monitor image URI (us-east-1) as the return value
+    # The 156813124566 is one of the actual account ids for a public Model Monitor Image provided
+    # by the SageMaker service. The reason is I need to provide a valid image URI because the SDK
+    # has validation for the inputs
     mocked_image_retrieve.return_value = "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer"
     # data quality monitor
     TestCase().assertEqual(

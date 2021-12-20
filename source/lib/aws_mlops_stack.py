@@ -67,6 +67,8 @@ class MLOpsStack(core.Stack):
         use_model_registry = pf.create_use_model_registry_parameter(self)
         # Does the user want the solution to create model registry
         create_model_registry = pf.create_model_registry_parameter(self)
+        # Enable detailed error message in the API response
+        allow_detailed_error_message = pf.create_detailed_error_message_parameter(self)
 
         # Conditions
         git_address_provided = cf.create_git_address_provided_condition(self, git_address)
@@ -284,6 +286,9 @@ class MLOpsStack(core.Stack):
         provisioner_apigw_lambda.lambda_function.add_environment(
             key="USE_MODEL_REGISTRY", value=use_model_registry.value_as_string
         )
+        provisioner_apigw_lambda.lambda_function.add_environment(
+            key="ALLOW_DETAILED_ERROR_MESSAGE", value=allow_detailed_error_message.value_as_string
+        )
 
         provisioner_apigw_lambda.lambda_function.add_environment(key="ECR_REPO_NAME", value=ecr_repo_name)
 
@@ -402,6 +407,7 @@ class MLOpsStack(core.Stack):
             existing_ecr_repo.logical_id,
             use_model_registry.logical_id,
             create_model_registry.logical_id,
+            allow_detailed_error_message.logical_id,
         ]
 
         paramaters_labels = {
@@ -412,6 +418,9 @@ class MLOpsStack(core.Stack):
             f"{use_model_registry.logical_id}": {"default": "Do you want to use SageMaker Model Registry?"},
             f"{create_model_registry.logical_id}": {
                 "default": "Do you want the solution to create a SageMaker's model package group?"
+            },
+            f"{allow_detailed_error_message.logical_id}": {
+                "default": "Do you want to allow detailed error messages in the APIs response?"
             },
         }
 
