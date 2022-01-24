@@ -1,4 +1,4 @@
-# aws-mlops-framework
+# mlops-workload-orchestrator
 
 The machine learning (ML) lifecycle is an iterative and repetitive process that involves
 changing models over time and learning from new data. As ML applications gain popularity,
@@ -16,9 +16,9 @@ pipeline for building and registering Docker images for custom algorithms that c
 deployment on an [Amazon SageMaker](https://aws.amazon.com/sagemaker/) endpoint.
 
 You can use batch and real-time data inferences to configure the pipeline for your business context.
-You can also provision multiple data quality and model quality Monitor pipelines to periodically monitor the quality of deployed
-Amazon SageMaker ML models. This solution increases your team’s agility and efficiency by allowing them
-to repeat successful processes at scale.
+You can also provision multiple data quality, model quality, model bias, and model explainability Monitor
+pipelines to periodically monitor the quality of deployed Amazon SageMaker ML models. This solution
+increases your team’s agility and efficiency by allowing them to repeat successful processes at scale.
 
 #### Benefits
 
@@ -122,8 +122,8 @@ chmod +x ./build-s3-dist.sh
 - Upload the distributable assets to your Amazon S3 bucket in your account. Note: ensure that you own the Amazon S3 bucket before uploading the assets. To upload the assets to the S3 bucket, you can use the AWS Console or the AWS CLI as shown below.
 
 ```
-aws s3 cp ./global-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-framework/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
-aws s3 cp ./regional-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-framework/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
+aws s3 cp ./global-s3-assets/ s3://my-bucket-name-<aws_region>/mlops-workload-orchestrator/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
+aws s3 cp ./regional-s3-assets/ s3://my-bucket-name-<aws_region>/mlops-workload-orchestrator/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
 ```
 
 ---
@@ -132,17 +132,17 @@ aws s3 cp ./regional-s3-assets/ s3://my-bucket-name-<aws_region>/aws-mlops-frame
 
 ```
 $DIST_OUTPUT_BUCKET - This is the global name of the distribution. For the bucket name, the AWS Region is added to the global name (example: 'my-bucket-name-us-east-1') to create a regional bucket. The lambda artifact should be uploaded to the regional buckets for the CloudFormation template to pick it up for deployment.
-$SOLUTION_NAME - The name of This solution (example: aws-mlops-framework)
+$SOLUTION_NAME - The name of This solution (example: mlops-workload-orchestrator)
 $VERSION - The version number of the change
 ```
 
 ## Uninstall the solution
 
-Please refer to the [Uninstall the solution section](https://docs.aws.amazon.com/solutions/latest/aws-mlops-framework/uninstall-the-solution.html) in the [solution's implementation guide](https://docs.aws.amazon.com/solutions/latest/aws-mlops-framework/welcome.html).
+Please refer to the [Uninstall the solution section](https://docs.aws.amazon.com/solutions/latest/mlops-workload-orchestrator/uninstall-the-solution.html) in the [solution's implementation guide](https://docs.aws.amazon.com/solutions/latest/mlops-workload-orchestrator/welcome.html).
 
 ## Collection of operational metrics
 
-This solution collects anonymous operational metrics to help AWS improve the quality and features of the solution. For more information, including how to disable this capability, please see the [implementation guide](https://docs.aws.amazon.com/solutions/latest/aws-mlops-framework/operational-metrics.html).
+This solution collects anonymous operational metrics to help AWS improve the quality and features of the solution. For more information, including how to disable this capability, please see the [implementation guide](https://docs.aws.amazon.com/solutions/latest/mlops-workload-orchestrator/operational-metrics.html).
 
 ## Known Issues
 
@@ -157,7 +157,7 @@ For more information regarding this issue and short-term and long-term fixes, re
 
 ---
 
-Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 Licensed under the Apache License Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
 

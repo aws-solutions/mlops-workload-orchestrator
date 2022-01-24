@@ -21,7 +21,11 @@ sagemaker_arn_prefix = f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{c
 
 
 def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_name_provided):
-    actions = ["sagemaker:CreateModel", "sagemaker:DescribeModel", "sagemaker:DeleteModel"]
+    actions = [
+        "sagemaker:CreateModel",
+        "sagemaker:DescribeModel",  # NOSONAR: permission needs to be repeated for clarity
+        "sagemaker:DeleteModel",
+    ]
     resources = [f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*"]
 
     if is_realtime_pipeline:
@@ -29,10 +33,10 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
         actions.extend(
             [
                 "sagemaker:CreateEndpointConfig",
-                "sagemaker:DescribeEndpointConfig",
+                "sagemaker:DescribeEndpointConfig",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DeleteEndpointConfig",
                 "sagemaker:CreateEndpoint",
-                "sagemaker:DescribeEndpoint",
+                "sagemaker:DescribeEndpoint",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DeleteEndpoint",
             ]
         )
@@ -55,15 +59,48 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
     )
 
 
-def sagemaker_baseline_job_policy(baseline_job_name):
+def baseline_lambda_get_model_name_policy(endpoint_name):
+    # these permissions are required to get the ModelName used by the monitored endpoint
     return iam.PolicyStatement(
         actions=[
-            "sagemaker:CreateProcessingJob",
-            "sagemaker:DescribeProcessingJob",
-            "sagemaker:StopProcessingJob",
-            "sagemaker:DeleteProcessingJob",
+            "sagemaker:DescribeModel",
+            "sagemaker:DescribeEndpointConfig",
+            "sagemaker:DescribeEndpoint",
         ],
-        resources=[f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}"],
+        resources=[
+            f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*",
+            f"{sagemaker_arn_prefix}:endpoint-config/mlopssagemakerendpointconfig*",
+            f"{sagemaker_arn_prefix}:endpoint/{endpoint_name}",
+        ],
+    )
+
+
+def sagemaker_model_bias_explainability_baseline_job_policy():
+    # required to create/delete a Shadow endpointConfig/Endpoint created by the sagemaker clarify
+    return iam.PolicyStatement(
+        actions=[
+            "sagemaker:DescribeModel",
+            "sagemaker:DescribeEndpointConfig",
+            "sagemaker:DescribeEndpoint",
+            "sagemaker:CreateEndpointConfig",
+            "sagemaker:CreateEndpoint",
+            "sagemaker:DeleteEndpointConfig",
+            "sagemaker:DeleteEndpoint",
+            "sagemaker:InvokeEndpoint",
+        ],
+        resources=[
+            f"{sagemaker_arn_prefix}:endpoint-config/sagemaker-clarify-endpoint-config*",
+            f"{sagemaker_arn_prefix}:endpoint/sagemaker-clarify-endpoint*",
+        ],
+    )
+
+
+def sagemaker_baseline_job_policy(baseline_job_name):
+    return iam.PolicyStatement(
+        actions=["sagemaker:CreateProcessingJob", "sagemaker:DescribeProcessingJob", "sagemaker:StopProcessingJob"],
+        resources=[
+            f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}",
+        ],
     )
 
 
@@ -85,31 +122,70 @@ def create_service_role(scope, id, service, description):
     )
 
 
-def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_name, endpoint_name):
+def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_name, endpoint_name, monitoring_type):
+    # common permissions
+    actions = [
+        "sagemaker:DescribeEndpointConfig",
+        "sagemaker:DescribeEndpoint",
+        "sagemaker:CreateMonitoringSchedule",
+        "sagemaker:DescribeMonitoringSchedule",
+        "sagemaker:StopMonitoringSchedule",
+        "sagemaker:DeleteMonitoringSchedule",
+        "sagemaker:DescribeProcessingJob",
+    ]
+    # common resources
+    resources = [
+        f"{sagemaker_arn_prefix}:endpoint-config/mlopssagemakerendpointconfig*",
+        f"{sagemaker_arn_prefix}:endpoint/{endpoint_name}",
+        f"{sagemaker_arn_prefix}:monitoring-schedule/{monitoring_schedule_name}",
+        f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}",
+    ]
+
+    # create a map of monitoring type -> required permissions/resources
+    type_permissions = {
+        "DataQuality": {
+            "permissions": [
+                "sagemaker:CreateDataQualityJobDefinition",
+                "sagemaker:DescribeDataQualityJobDefinition",
+                "sagemaker:DeleteDataQualityJobDefinition",
+            ],
+            "resources": [f"{sagemaker_arn_prefix}:data-quality-job-definition/*"],
+        },
+        "ModelQuality": {
+            "permissions": [
+                "sagemaker:CreateModelQualityJobDefinition",
+                "sagemaker:DescribeModelQualityJobDefinition",
+                "sagemaker:DeleteModelQualityJobDefinition",
+            ],
+            "resources": [f"{sagemaker_arn_prefix}:model-quality-job-definition/*"],
+        },
+        "ModelBias": {
+            "permissions": [
+                "sagemaker:CreateModelBiasJobDefinition",
+                "sagemaker:DescribeModelBiasJobDefinition",
+                "sagemaker:DeleteModelBiasJobDefinition",
+            ],
+            "resources": [f"{sagemaker_arn_prefix}:model-bias-job-definition/*"],
+        },
+        "ModelExplainability": {
+            "permissions": [
+                "sagemaker:CreateModelExplainabilityJobDefinition",
+                "sagemaker:DescribeModelExplainabilityJobDefinition",
+                "sagemaker:DeleteModelExplainabilityJobDefinition",
+            ],
+            "resources": [f"{sagemaker_arn_prefix}:model-explainability-job-definition/*"],
+        },
+    }
+    # add monitoring type's specific permissions
+    actions.extend(type_permissions[monitoring_type]["permissions"])
+
+    # add monitoring type's specific resources
+    resources.extend(type_permissions[monitoring_type]["resources"])
+
+    # create the policy statement
     return iam.PolicyStatement(
-        actions=[
-            "sagemaker:DescribeEndpointConfig",
-            "sagemaker:DescribeEndpoint",
-            "sagemaker:CreateMonitoringSchedule",
-            "sagemaker:DescribeMonitoringSchedule",
-            "sagemaker:StopMonitoringSchedule",
-            "sagemaker:DeleteMonitoringSchedule",
-            "sagemaker:DescribeProcessingJob",
-            "sagemaker:CreateDataQualityJobDefinition",
-            "sagemaker:DescribeDataQualityJobDefinition",
-            "sagemaker:DeleteDataQualityJobDefinition",
-            "sagemaker:CreateModelQualityJobDefinition",
-            "sagemaker:DescribeModelQualityJobDefinition",
-            "sagemaker:DeleteModelQualityJobDefinition",
-        ],
-        resources=[
-            f"{sagemaker_arn_prefix}:endpoint-config/mlopssagemakerendpointconfig*",
-            f"{sagemaker_arn_prefix}:endpoint/{endpoint_name}",
-            f"{sagemaker_arn_prefix}:monitoring-schedule/{monitoring_schedule_name}",
-            f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}",
-            f"{sagemaker_arn_prefix}:data-quality-job-definition/*",
-            f"{sagemaker_arn_prefix}:model-quality-job-definition/*",
-        ],
+        actions=actions,
+        resources=resources,
     )
 
 

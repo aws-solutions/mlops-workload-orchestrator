@@ -141,6 +141,16 @@ class ParameteresFactory:
         )
 
     @staticmethod
+    def create_ground_truth_bucket_name_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "GroundTruthBucket",
+            type="String",
+            description="Bucket name where the ground truth data will be stored.",
+            min_length=3,
+        )
+
+    @staticmethod
     def create_custom_algorithms_ecr_repo_arn_parameter(scope: core.Construct) -> core.CfnParameter:
         return core.CfnParameter(
             scope,
@@ -539,9 +549,70 @@ class ParameteresFactory:
         return core.CfnParameter(
             scope,
             "ProbabilityThresholdAttribute",
-            default="0.5",
-            type="Number",
+            type="String",
             description="Threshold to convert probabilities to binaries",
+        )
+
+    @staticmethod
+    def create_model_predicted_label_config_parameter(scope):
+        return core.CfnParameter(
+            scope,
+            "ModelPredictedLabelConfig",
+            type="String",
+            description=(
+                "Dictionary provided as a json of the"
+                " sagemaker.clarify.ModelPredictedLabelConfig attributes ({'label':...,}). "
+                "Optional for a regression problem."
+            ),
+        )
+
+    @staticmethod
+    def create_bias_config_parameter(scope):
+        return core.CfnParameter(
+            scope,
+            "BiasConfig",
+            type="String",
+            description=(
+                "Dictionary provided as a json using "
+                "of the sagemaker.clarify.BiasConfig attributes ({'label_values_or_threshold':...,})."
+            ),
+            min_length=3,
+        )
+
+    @staticmethod
+    def create_shap_config_parameter(scope):
+        return core.CfnParameter(
+            scope,
+            "SHAPConfig",
+            type="String",
+            description=(
+                "Dictionary provided as a json "
+                "of the sagemaker.clarify.SHAPConfig attributes "
+                "({'baseline':...,})."
+            ),
+            min_length=3,
+        )
+
+    @staticmethod
+    def create_model_scores_parameter(scope):
+        return core.CfnParameter(
+            scope,
+            "ExplainabilityModelScores",
+            type="String",
+            description=(
+                "A Python int/str provided as a string (e.g., using json.dumps(5)) "
+                "Index or JSONPath location in the model output for the predicted "
+                "scores to be explained. This is not required if the model output is a single score."
+            ),
+        )
+
+    @staticmethod
+    def create_features_attribute_parameter(scope):
+        return core.CfnParameter(
+            scope,
+            "FeaturesAttribute",
+            type="String",
+            description="Index or JSONpath to locate features",
         )
 
 
@@ -655,15 +726,15 @@ class ConditionsFactory:
         )
 
     @staticmethod
-    def create_problem_type_regression_or_multiclass_classification_condition(
-        scope: core.Construct, problem_type: core.CfnParameter
+    def create_problem_type_binary_classification_attribute_provided_condition(
+        scope: core.Construct, problem_type: core.CfnParameter, attribute: core.CfnParameter, attribute_name: str
     ) -> core.CfnCondition:
         return core.CfnCondition(
             scope,
-            "ProblemTypeRegressionOrMulticlassClassification",
-            expression=core.Fn.condition_or(
-                core.Fn.condition_equals(problem_type.value_as_string, "Regression"),
-                core.Fn.condition_equals(problem_type.value_as_string, "MulticlassClassification"),
+            f"ProblemTypeBinaryClassification{attribute_name}Provided",
+            expression=core.Fn.condition_and(
+                core.Fn.condition_equals(problem_type.value_as_string, "BinaryClassification"),
+                core.Fn.condition_not(core.Fn.condition_equals(attribute.value_as_string, "")),
             ),
         )
 
@@ -675,4 +746,12 @@ class ConditionsFactory:
             scope,
             "ProblemTypeBinaryClassification",
             expression=core.Fn.condition_equals(problem_type.value_as_string, "BinaryClassification"),
+        )
+
+    @staticmethod
+    def create_attribute_provided_condition(scope, logical_id, attribute):
+        return core.CfnCondition(
+            scope,
+            logical_id,
+            expression=core.Fn.condition_not(core.Fn.condition_equals(attribute, "")),
         )

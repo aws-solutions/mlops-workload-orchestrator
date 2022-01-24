@@ -23,7 +23,7 @@ class SageMakerModelMonitor(core.Construct):
         id (str): CDK resource's logical id
         monitoring_schedule_name (str): name of the monitoring job to be created
         endpoint_name (str): name of the deployed SageMaker endpoint to be monitored
-        baseline_job_name (str): name of the baseline job
+        baseline_job_output_location (str): the baseline job's output location <bucket-name>/<prefix>
         schedule_expression (str): cron job expression
         monitoring_output_location (str): S3 location where the output will be stored
         instance_type (str): compute instance type for the baseline job, in the form of a CDK CfnParameter object
@@ -55,7 +55,6 @@ class SageMakerModelMonitor(core.Construct):
         id: str,
         monitoring_schedule_name: str,
         endpoint_name: str,
-        baseline_job_name: str,
         baseline_job_output_location: str,
         schedule_expression: str,
         monitoring_output_location: str,
@@ -73,6 +72,8 @@ class SageMakerModelMonitor(core.Construct):
         inference_attribute: Optional[str] = None,
         probability_attribute: Optional[str] = None,
         probability_threshold_attribute: Optional[str] = None,
+        config_uri: Optional[str] = None,
+        features_attribute: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, id, **kwargs)
@@ -80,7 +81,6 @@ class SageMakerModelMonitor(core.Construct):
         self.id = id
         self.monitoring_schedule_name = monitoring_schedule_name
         self.endpoint_name = endpoint_name
-        self.baseline_job_name = baseline_job_name
         self.baseline_job_output_location = baseline_job_output_location
         self.schedule_expression = schedule_expression
         self.monitoring_output_location = monitoring_output_location
@@ -98,13 +98,14 @@ class SageMakerModelMonitor(core.Construct):
         self.inference_attribute = inference_attribute
         self.probability_attribute = probability_attribute
         self.probability_threshold_attribute = probability_threshold_attribute
+        self.features_attribute = features_attribute
 
         # validate the provided monitoring_type
-        if monitoring_type not in ["DataQuality", "ModelQuality"]:
+        if monitoring_type not in ["DataQuality", "ModelQuality", "ModelBias", "ModelExplainability"]:
             raise ValueError(
                 (
                     f"The provided monitoring type: {monitoring_type} is not valid. "
-                    + "It must be 'DataQuality'|'ModelQuality'"
+                    + "It must be 'DataQuality'|'ModelQuality'|'ModelBias'|'ModelExplainability"
                 )
             )
 
@@ -121,20 +122,29 @@ class SageMakerModelMonitor(core.Construct):
 
     def _get_job_definition(
         self, monitoring_type: str, id: str
-    ) -> Union[sagemaker.CfnDataQualityJobDefinition, sagemaker.CfnModelQualityJobDefinition]:
+    ) -> Union[
+        sagemaker.CfnDataQualityJobDefinition,
+        sagemaker.CfnModelQualityJobDefinition,
+        sagemaker.CfnModelBiasJobDefinition,
+        sagemaker.CfnModelExplainabilityJobDefinition,
+    ]:
         """
         Gets the *JobDefinition based on the monitoring_type
 
         Args:
-            monitoring_type (str): possible values [DataQuality, ModelQuality]
+            monitoring_type (str): possible values ['DataQuality'|'ModelQuality'|'ModelBias'|'ModelExplainability']
             id (str): CDK resource's logical id
 
         Returns:
-            sagemaker.CfnDataQualityJobDefinition or sagemaker.CfnModelQualityJobDefinition object
+            sagemaker.CfnDataQualityJobDefinition|sagemaker.CfnModelQualityJobDefinition object|
+            sagemaker.CfnModelBiasJobDefinition|sagemaker.CfnModelExplainabilityJobDefinition
         """
         # create *JobDefinition MonitoringType->function_name map
         type_function_map = dict(
-            DataQuality="_create_data_quality_job_definition", ModelQuality="_create_model_quality_job_definition"
+            DataQuality="_create_data_quality_job_definition",
+            ModelQuality="_create_model_quality_job_definition",
+            ModelBias="_create_model_bias_job_definition",
+            ModelExplainability="_create_model_explainability_job_definition",
         )
 
         # call the right function to create the *JobDefinition
@@ -163,10 +173,10 @@ class SageMakerModelMonitor(core.Construct):
             ),
             data_quality_baseline_config=sagemaker.CfnDataQualityJobDefinition.DataQualityBaselineConfigProperty(
                 constraints_resource=sagemaker.CfnDataQualityJobDefinition.ConstraintsResourceProperty(
-                    s3_uri=f"s3://{self.baseline_job_output_location}/constraints.json"
+                    s3_uri=f"{self.baseline_job_output_location}/constraints.json"
                 ),
                 statistics_resource=sagemaker.CfnDataQualityJobDefinition.StatisticsResourceProperty(
-                    s3_uri=f"s3://{self.baseline_job_output_location}/statistics.json"
+                    s3_uri=f"{self.baseline_job_output_location}/statistics.json"
                 ),
             ),
             data_quality_job_input=sagemaker.CfnDataQualityJobDefinition.DataQualityJobInputProperty(
@@ -179,7 +189,7 @@ class SageMakerModelMonitor(core.Construct):
                 monitoring_outputs=[
                     sagemaker.CfnDataQualityJobDefinition.MonitoringOutputProperty(
                         s3_output=sagemaker.CfnDataQualityJobDefinition.S3OutputProperty(
-                            s3_uri=f"s3://{self.monitoring_output_location}",
+                            s3_uri=self.monitoring_output_location,
                             local_path="/opt/ml/processing/output/data_quality_output",
                             s3_upload_mode="EndOfJob",
                         )
@@ -227,7 +237,7 @@ class SageMakerModelMonitor(core.Construct):
             ),
             model_quality_baseline_config=sagemaker.CfnModelQualityJobDefinition.ModelQualityBaselineConfigProperty(
                 constraints_resource=sagemaker.CfnModelQualityJobDefinition.ConstraintsResourceProperty(
-                    s3_uri=f"s3://{self.baseline_job_output_location}/constraints.json"
+                    s3_uri=f"{self.baseline_job_output_location}/constraints.json"
                 ),
             ),
             model_quality_job_input=sagemaker.CfnModelQualityJobDefinition.ModelQualityJobInputProperty(
@@ -239,14 +249,14 @@ class SageMakerModelMonitor(core.Construct):
                     probability_threshold_attribute=core.Token.as_number(self.probability_threshold_attribute),
                 ),
                 ground_truth_s3_input=sagemaker.CfnModelQualityJobDefinition.MonitoringGroundTruthS3InputProperty(
-                    s3_uri=f"s3://{self.ground_truth_s3_uri}"
+                    s3_uri=self.ground_truth_s3_uri
                 ),
             ),
             model_quality_job_output_config=sagemaker.CfnModelQualityJobDefinition.MonitoringOutputConfigProperty(
                 monitoring_outputs=[
                     sagemaker.CfnModelQualityJobDefinition.MonitoringOutputProperty(
                         s3_output=sagemaker.CfnModelQualityJobDefinition.S3OutputProperty(
-                            s3_uri=f"s3://{self.monitoring_output_location}",
+                            s3_uri=self.monitoring_output_location,
                             local_path="/opt/ml/processing/output/model_quality_output",
                             s3_upload_mode="EndOfJob",
                         )
@@ -271,17 +281,153 @@ class SageMakerModelMonitor(core.Construct):
 
         return model_quality_job_definition
 
+    def _create_model_bias_job_definition(
+        self,
+        id: str,
+    ) -> sagemaker.CfnModelBiasJobDefinition:
+        """
+        Creates Amazon SageMaker's Model Bias Job Definition
+
+        Args:
+            id (str): CDK resource's logical id
+
+        Returns:
+            sagemaker.CfnModelBiasJobDefinition object
+        """
+        # create the ModelBiasJobDefinition
+        model_bias_job_definition = sagemaker.CfnModelBiasJobDefinition(
+            self.scope,
+            id,
+            model_bias_app_specification=sagemaker.CfnModelBiasJobDefinition.ModelBiasAppSpecificationProperty(
+                config_uri=f"{self.baseline_job_output_location}/analysis_config.json", image_uri=self.image_uri
+            ),
+            model_bias_baseline_config=sagemaker.CfnModelBiasJobDefinition.ModelBiasBaselineConfigProperty(
+                constraints_resource=sagemaker.CfnModelBiasJobDefinition.ConstraintsResourceProperty(
+                    s3_uri=f"{self.baseline_job_output_location}/analysis.json"
+                ),
+            ),
+            model_bias_job_input=sagemaker.CfnModelBiasJobDefinition.ModelBiasJobInputProperty(
+                endpoint_input=sagemaker.CfnModelBiasJobDefinition.EndpointInputProperty(
+                    endpoint_name=self.endpoint_name,
+                    local_path="/opt/ml/processing/input/model_bias_input",
+                    features_attribute=self.features_attribute,
+                    inference_attribute=self.inference_attribute,
+                    probability_attribute=self.probability_attribute,
+                    probability_threshold_attribute=core.Token.as_number(self.probability_threshold_attribute),
+                ),
+                ground_truth_s3_input=sagemaker.CfnModelBiasJobDefinition.MonitoringGroundTruthS3InputProperty(
+                    s3_uri=self.ground_truth_s3_uri
+                ),
+            ),
+            model_bias_job_output_config=sagemaker.CfnModelBiasJobDefinition.MonitoringOutputConfigProperty(
+                monitoring_outputs=[
+                    sagemaker.CfnModelBiasJobDefinition.MonitoringOutputProperty(
+                        s3_output=sagemaker.CfnModelBiasJobDefinition.S3OutputProperty(
+                            s3_uri=self.monitoring_output_location,
+                            local_path="/opt/ml/processing/output/model_bias_output",
+                            s3_upload_mode="EndOfJob",
+                        )
+                    )
+                ],
+                kms_key_id=self.kms_key_arn,
+            ),
+            job_resources=sagemaker.CfnModelBiasJobDefinition.MonitoringResourcesProperty(
+                cluster_config=sagemaker.CfnModelBiasJobDefinition.ClusterConfigProperty(
+                    instance_count=core.Token.as_number(self.instance_count),
+                    instance_type=self.instance_type,
+                    volume_size_in_gb=core.Token.as_number(self.instance_volume_size),
+                    volume_kms_key_id=self.kms_key_arn,
+                )
+            ),
+            stopping_condition=sagemaker.CfnModelBiasJobDefinition.StoppingConditionProperty(
+                max_runtime_in_seconds=core.Token.as_number(self.max_runtime_seconds)
+            ),
+            role_arn=self.role_arn,
+            tags=self.tags,
+        )
+
+        return model_bias_job_definition
+
+    def _create_model_explainability_job_definition(
+        self,
+        id: str,
+    ) -> sagemaker.CfnModelExplainabilityJobDefinition:
+        """
+        Creates Amazon SageMaker's Model Explainability Job Definition
+
+        Args:
+            id (str): CDK resource's logical id
+
+        Returns:
+            sagemaker.CfnModelExplainabilityJobDefinition object
+        """
+        # create the ModelExplainabilityJobDefinition
+        model_explainability_job_definition = sagemaker.CfnModelExplainabilityJobDefinition(
+            self.scope,
+            id,
+            model_explainability_app_specification=sagemaker.CfnModelExplainabilityJobDefinition.ModelExplainabilityAppSpecificationProperty(
+                config_uri=f"{self.baseline_job_output_location}/analysis_config.json", image_uri=self.image_uri
+            ),
+            model_explainability_baseline_config=sagemaker.CfnModelExplainabilityJobDefinition.ModelExplainabilityBaselineConfigProperty(
+                constraints_resource=sagemaker.CfnModelExplainabilityJobDefinition.ConstraintsResourceProperty(
+                    s3_uri=f"{self.baseline_job_output_location}/analysis.json"
+                ),
+            ),
+            model_explainability_job_input=sagemaker.CfnModelExplainabilityJobDefinition.ModelExplainabilityJobInputProperty(
+                endpoint_input=sagemaker.CfnModelExplainabilityJobDefinition.EndpointInputProperty(
+                    endpoint_name=self.endpoint_name,
+                    local_path="/opt/ml/processing/input/model_explainability_input",
+                    features_attribute=self.features_attribute,
+                    inference_attribute=self.inference_attribute,
+                    probability_attribute=self.probability_attribute,
+                )
+            ),
+            model_explainability_job_output_config=sagemaker.CfnModelExplainabilityJobDefinition.MonitoringOutputConfigProperty(
+                monitoring_outputs=[
+                    sagemaker.CfnModelExplainabilityJobDefinition.MonitoringOutputProperty(
+                        s3_output=sagemaker.CfnModelExplainabilityJobDefinition.S3OutputProperty(
+                            s3_uri=self.monitoring_output_location,
+                            local_path="/opt/ml/processing/output/model_explainability_output",
+                            s3_upload_mode="EndOfJob",
+                        )
+                    )
+                ],
+                kms_key_id=self.kms_key_arn,
+            ),
+            job_resources=sagemaker.CfnModelExplainabilityJobDefinition.MonitoringResourcesProperty(
+                cluster_config=sagemaker.CfnModelExplainabilityJobDefinition.ClusterConfigProperty(
+                    instance_count=core.Token.as_number(self.instance_count),
+                    instance_type=self.instance_type,
+                    volume_size_in_gb=core.Token.as_number(self.instance_volume_size),
+                    volume_kms_key_id=self.kms_key_arn,
+                )
+            ),
+            stopping_condition=sagemaker.CfnModelExplainabilityJobDefinition.StoppingConditionProperty(
+                max_runtime_in_seconds=core.Token.as_number(self.max_runtime_seconds)
+            ),
+            role_arn=self.role_arn,
+            tags=self.tags,
+        )
+
+        return model_explainability_job_definition
+
     def _create_sagemaker_monitoring_schedule(
         self,
         monitoring_schedule_name: str,
-        monitor_job_definition: Union[sagemaker.CfnDataQualityJobDefinition, sagemaker.CfnModelQualityJobDefinition],
+        monitor_job_definition: Union[
+            sagemaker.CfnDataQualityJobDefinition,
+            sagemaker.CfnModelQualityJobDefinition,
+            sagemaker.CfnModelBiasJobDefinition,
+            sagemaker.CfnModelExplainabilityJobDefinition,
+        ],
     ) -> sagemaker.CfnMonitoringSchedule:
         """
         Creates Amazon SageMaker's Monitoring Schedule object
 
         Args:
             monitoring_schedule_name (str): name of the monitoring job to be created
-            monitor_job_definition (sagemaker.CfnDataQualityJobDefinition or sagemaker.CfnModelQualityJobDefinition):
+            monitor_job_definition (sagemaker.CfnDataQualityJobDefinition|sagemaker.CfnModelQualityJobDefinition object|
+                sagemaker.CfnModelBiasJobDefinition|sagemaker.CfnModelExplainabilityJobDefinition):
                 monitor job definition
 
         Returns:
@@ -314,7 +460,14 @@ class SageMakerModelMonitor(core.Construct):
         return schedule
 
     @property
-    def job_definition(self) -> Union[sagemaker.CfnDataQualityJobDefinition, sagemaker.CfnModelQualityJobDefinition]:
+    def job_definition(
+        self,
+    ) -> Union[
+        sagemaker.CfnDataQualityJobDefinition,
+        sagemaker.CfnModelQualityJobDefinition,
+        sagemaker.CfnModelBiasJobDefinition,
+        sagemaker.CfnModelExplainabilityJobDefinition,
+    ]:
         return self.__job_definition
 
     @property
