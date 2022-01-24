@@ -47,6 +47,15 @@ def mock_env_variables():
     os.environ["IS_DELEGATED_ADMIN"] = "No"
     os.environ["MODEL_PACKAGE_GROUP_NAME"] = "xgboost"
     os.environ["MODEL_PACKAGE_NAME"] = "arn:aws:sagemaker:*:*:model-package/xgboost/1"
+    os.environ["MODEL_PREDICTED_LABEL_CONFIG"] = json.dumps(dict(probability=0))
+    os.environ["BIAS_CONFIG"] = json.dumps(
+        dict(
+            label_values_or_threshold=[1],
+            facet_name="age",
+            facet_values_or_threshold=[40],
+            group_name="personal_status_sex",
+        )
+    )
 
 
 @pytest.fixture
@@ -147,6 +156,33 @@ def api_model_quality_event(api_data_quality_event):
 
 
 @pytest.fixture
+def api_model_bias_event(api_model_quality_event):
+    model_bias_event = api_model_quality_event.copy()
+    model_bias_event.update(
+        {
+            "pipeline_type": "byom_model_bias_monitor",
+            "model_predicted_label_config": os.environ["MODEL_PREDICTED_LABEL_CONFIG"],
+            "bias_config": os.environ["BIAS_CONFIG"],
+        }
+    )
+    return model_bias_event
+
+
+@pytest.fixture
+def api_model_explainability_event(api_model_bias_event):
+    model_explainability_event = api_model_bias_event.copy()
+    model_explainability_event.update(
+        {
+            "pipeline_type": "byom_model_explainability_monitor",
+        }
+    )
+    # remove monitor_ground_truth_input
+    del model_explainability_event["monitor_ground_truth_input"]
+
+    return model_explainability_event
+
+
+@pytest.fixture
 def api_image_builder_event():
     return {
         "pipeline_type": "byom_image_builder",
@@ -214,11 +250,42 @@ def expected_model_quality_monitor_params(expected_data_quality_monitor_params):
             ("MonitorInferenceAttribute", "0"),
             ("MonitorProbabilityAttribute", "0"),
             ("ProbabilityThresholdAttribute", "0.5"),
+            ("GroundTruthBucket", "test-bucket"),
             ("MonitorGroundTruthInput", "s3://test-bucket/groundtruth"),
         ]
     )
 
     return expected_model_quality
+
+
+@pytest.fixture
+def expected_model_explainability_monitor_params(expected_model_quality_monitor_params):
+    expected_model_expainability = expected_model_quality_monitor_params[3:-2].copy()
+    # add ModelExpainability params
+    expected_model_expainability.extend(
+        [
+            ("SHAPConfig", json.dumps(os.getenv("SHAP_CONFIG", {}))),
+            ("ExplainabilityModelScores", ""),
+            ("FeaturesAttribute", ""),
+        ]
+    )
+
+    return expected_model_expainability
+
+
+@pytest.fixture
+def expected_model_bias_monitor_params(expected_model_quality_monitor_params):
+    expected_model_bias = expected_model_quality_monitor_params[3:].copy()
+
+    expected_model_bias.extend(
+        [
+            ("BiasConfig", os.environ["BIAS_CONFIG"]),
+            ("ModelPredictedLabelConfig", os.environ["MODEL_PREDICTED_LABEL_CONFIG"]),
+            ("FeaturesAttribute", ""),
+        ]
+    )
+
+    return expected_model_bias
 
 
 @pytest.fixture
@@ -431,28 +498,50 @@ def required_api_keys_model_monitor():
             "instance_type",
             "instance_volume_size",
         ]
-        if monitoring_type != "ModelQuality":
+        if monitoring_type == "DataQuality":
             return common_keys
-        else:
-            common_model_keys = [
-                "baseline_inference_attribute",
-                "baseline_ground_truth_attribute",
-                "problem_type",
-                "monitor_ground_truth_input",
-            ]
-            if problem_type in ["Regression", "MulticlassClassification"]:
-                common_model_keys.append("monitor_inference_attribute")
 
-            # BinaryClassification problem
-            else:
-                common_model_keys.extend(
-                    [
-                        "monitor_probability_attribute",
-                        "probability_threshold_attribute",
-                        "baseline_probability_attribute",
-                    ]
-                )
-            return [*common_keys, *common_model_keys]
+        # ModelQuality specific keys
+        model_quality_keys = ["baseline_inference_attribute", "baseline_ground_truth_attribute"]
+        # common model related monitors
+        common_model_keys = ["problem_type"]
+        # add required keys based on problem type
+        if problem_type in ["Regression", "MulticlassClassification"]:
+            common_model_keys.append("monitor_inference_attribute")
+        elif monitoring_type == "ModelQuality":
+            model_quality_keys.append("baseline_probability_attribute")
+
+        # shared_model_quality_bias keys
+        shared_model_quality_bias_keys = ["monitor_ground_truth_input"]
+
+        # add model_predicted_label_config if "byom_model_bias_monitor" and
+        # the problem is "BinaryClassification" or "MulticlassClassification"
+        extra_bias_keys = []
+        if monitoring_type == "ModelBias" and problem_type in [
+            "BinaryClassification",
+            "MulticlassClassification",
+        ]:
+            extra_bias_keys.append("model_predicted_label_config")
+
+        # create MonitoringType -> RequiredParamaters map
+        type_keys = {
+            "ModelQuality": [
+                *common_keys,
+                *model_quality_keys,
+                *common_model_keys,
+                *shared_model_quality_bias_keys,
+            ],
+            "ModelBias": [
+                *common_keys,
+                *common_model_keys,
+                *shared_model_quality_bias_keys,
+                *extra_bias_keys,
+                "bias_config",
+            ],
+            "ModelExplainability": [*common_keys, *common_model_keys, "shap_config"],
+        }
+
+        return type_keys.get(monitoring_type)
 
     return _required_api_keys_model_monitor
 

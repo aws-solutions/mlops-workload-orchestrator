@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # #####################################################################################################################
-#  Copyright 2020-2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                       #
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -12,7 +12,7 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 from aws_cdk import core
-from lib.aws_mlops_stack import MLOpsStack
+from lib.mlops_orchestrator_stack import MLOpsStack
 from lib.blueprints.byom.model_monitor import ModelMonitorStack
 from lib.blueprints.byom.realtime_inference_pipeline import BYOMRealtimePipelineStack
 from lib.blueprints.byom.byom_batch_pipeline import BYOMBatchStack
@@ -28,8 +28,8 @@ version = get_cdk_context_value(app, "Version")
 
 mlops_stack_single = MLOpsStack(
     app,
-    "aws-mlops-single-account-framework",
-    description=f"({solution_id}-sa) - AWS MLOps Framework (Single Account Option). Version {version}",
+    "mlops-workload-orchestrator-single-account",
+    description=f"({solution_id}-sa) - MLOps Workload Orchestrator (Single Account Option). Version {version}",
 )
 
 # add AWS_SDK_USER_AGENT env variable to Lambda functions
@@ -37,9 +37,9 @@ core.Aspects.of(mlops_stack_single).add(AwsSDKConfigAspect(app, "SDKUserAgentSin
 
 mlops_stack_multi = MLOpsStack(
     app,
-    "aws-mlops-multi-account-framework",
+    "mlops-workload-orchestrator-multi-account",
     multi_account=True,
-    description=f"({solution_id}-ma) - AWS MLOps Framework (Multi Account Option). Version {version}",
+    description=f"({solution_id}-ma) - MLOps Workload Orchestrator (Multi Account Option). Version {version}",
 )
 
 core.Aspects.of(mlops_stack_multi).add(AwsSDKConfigAspect(app, "SDKUserAgentMulti", solution_id, version))
@@ -49,7 +49,7 @@ BYOMCustomAlgorithmImageBuilderStack(
     "BYOMCustomAlgorithmImageBuilderStack",
     description=(
         f"({solution_id}byom-caib) - Bring Your Own Model pipeline to build custom algorithm docker images"
-        f"in AWS MLOps Framework. Version {version}"
+        f"in MLOps Workload Orchestrator. Version {version}"
     ),
 )
 
@@ -80,7 +80,28 @@ model_quality_monitor_stack = ModelMonitorStack(
 )
 
 core.Aspects.of(model_quality_monitor_stack).add(
-    AwsSDKConfigAspect(app, "SDKUserAgentModelMonitor", solution_id, version)
+    AwsSDKConfigAspect(app, "SDKUserAgentModelQuality", solution_id, version)
+)
+
+model_bias_monitor_stack = ModelMonitorStack(
+    app,
+    "ModelBiasModelMonitorStack",
+    monitoring_type="ModelBias",
+    description=(f"({solution_id}byom-mqmb) - ModelBias Model Monitor pipeline. Version {version}"),
+)
+
+core.Aspects.of(model_bias_monitor_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentModelBias", solution_id, version))
+
+
+model_explainability_monitor_stack = ModelMonitorStack(
+    app,
+    "ModelExplainabilityModelMonitorStack",
+    monitoring_type="ModelExplainability",
+    description=(f"({solution_id}byom-mqme) - ModelExplainability Model Monitor pipeline. Version {version}"),
+)
+
+core.Aspects.of(model_explainability_monitor_stack).add(
+    AwsSDKConfigAspect(app, "SDKUserAgentModelExplainability", solution_id, version)
 )
 
 

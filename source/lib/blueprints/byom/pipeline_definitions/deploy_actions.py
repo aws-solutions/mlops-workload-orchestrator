@@ -27,6 +27,8 @@ from lib.blueprints.byom.pipeline_definitions.cdk_context_value import get_cdk_c
 from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     create_service_role,
     sagemaker_baseline_job_policy,
+    sagemaker_model_bias_explainability_baseline_job_policy,
+    baseline_lambda_get_model_name_policy,
     sagemaker_logs_metrics_policy_document,
     batch_transform_policy,
     s3_policy_write,
@@ -156,6 +158,7 @@ def create_baseline_job_lambda(
     monitoring_type,
     baseline_job_name,
     baseline_data_location,
+    baseline_output_bucket,
     baseline_job_output_location,
     endpoint_name,
     instance_type,
@@ -170,6 +173,10 @@ def create_baseline_job_lambda(
     inference_attribute=None,
     probability_attribute=None,
     probability_threshold_attribute=None,
+    model_predicted_label_config=None,
+    bias_config=None,
+    shap_config=None,
+    model_scores=None,
 ):
     """
     create_baseline_job_lambda creates a data/model baseline processing job in a lambda invoked codepipeline action
@@ -200,12 +207,20 @@ def create_baseline_job_lambda(
         Used only with 'BinaryClassification' problem if 'inference_attribute' is not provided (default: None).
     :probability_threshold_attribute: threshold to convert probabilities to binaries (used with ModelQuality baseline).
         Used only with 'BinaryClassification' problem if 'inference_attribute' is not provided (default: None).
+    :model_predicted_label_config: Config of how to extract the predicted label
+        from the model output. Required for ModelBias monitor
+    :bias_config: Config object related to bias configurations of the input dataset. Required for ModelBias monitor
+    :shap_config: Config of the Shap explainability. Used by ModelExplainability monitor
+    :model_scores: Index or JSONPath location in the model output for the predicted scores to be explained.
+        This is not required if the model output is a single score.
     :return: codepipeline action in a form of a CDK object that can be attached to a codepipeline stage
     """
     s3_read = s3_policy_read(
         [
             f"arn:aws:s3:::{assets_bucket.bucket_name}",
-            f"arn:aws:s3:::{assets_bucket.bucket_name}/{baseline_data_location}",
+            f"arn:aws:s3:::{assets_bucket.bucket_name}/*",  # give access to files used by different monitors
+            f"arn:aws:s3:::{baseline_output_bucket}",
+            f"arn:aws:s3:::{baseline_output_bucket}/*",
         ]
     )
     s3_write = s3_policy_write(
@@ -215,6 +230,7 @@ def create_baseline_job_lambda(
     )
 
     create_baseline_job_policy = sagemaker_baseline_job_policy(baseline_job_name)
+
     sagemaker_logs_policy = sagemaker_logs_metrics_policy_document(scope, "BaselineLogsMetrics")
 
     # Kms Key permissions
@@ -244,6 +260,11 @@ def create_baseline_job_lambda(
 
     sagemaker_logs_policy.attach_to_role(sagemaker_role)
     sagemaker_role.add_to_policy(create_baseline_job_policy)
+    # add extra permissions for "ModelBias", "ModelExplainability" baselines
+    if monitoring_type in ["ModelBias", "ModelExplainability"]:
+        lambda_role.add_to_policy(baseline_lambda_get_model_name_policy(endpoint_name))
+        sagemaker_role.add_to_policy(baseline_lambda_get_model_name_policy(endpoint_name))
+        sagemaker_role.add_to_policy(sagemaker_model_bias_explainability_baseline_job_policy())
     sagemaker_role.add_to_policy(s3_read)
     sagemaker_role.add_to_policy(s3_write)
     sagemaker_role_nodes = sagemaker_role.node.find_all()
@@ -268,6 +289,13 @@ def create_baseline_job_lambda(
         "MAX_RUNTIME_SECONDS": max_runtime_seconds,
         "ROLE_ARN": sagemaker_role.role_arn,
         "KMS_KEY_ARN": kms_key_arn,
+        "ENDPOINT_NAME": endpoint_name,
+        "MODEL_PREDICTED_LABEL_CONFIG": model_predicted_label_config
+        if model_predicted_label_config
+        else core.Aws.NO_VALUE,
+        "BIAS_CONFIG": bias_config if bias_config else core.Aws.NO_VALUE,
+        "SHAP_CONFIG": shap_config if shap_config else core.Aws.NO_VALUE,
+        "MODEL_SCORES": model_scores if model_scores else core.Aws.NO_VALUE,
         "STACK_NAME": stack_name,
         "LOG_LEVEL": "INFO",
     }

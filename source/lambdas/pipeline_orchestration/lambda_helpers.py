@@ -40,6 +40,8 @@ def template_url(pipeline_type: str) -> str:
     byom_batch_pipeline.yaml
     byom_data_quality_monitor.yaml
     byom_model_quality_monitor.yaml
+    byom_model_bias_monitor.yaml
+    byom_model_expainability_monitor.yaml
     byom_custom_algorithm_image_builder.yaml
     single_account_codepipeline.yaml
     multi_account_codepipeline.yaml
@@ -55,6 +57,8 @@ def template_url(pipeline_type: str) -> str:
         "byom_batch_custom": batch_inference_template,
         "byom_data_quality_monitor": "blueprints/byom/byom_data_quality_monitor.yaml",
         "byom_model_quality_monitor": "blueprints/byom/byom_model_quality_monitor.yaml",
+        "byom_model_bias_monitor": "blueprints/byom/byom_model_bias_monitor.yaml",
+        "byom_model_explainability_monitor": "blueprints/byom/byom_model_explainability_monitor.yaml",
         "byom_image_builder": f"{url}/byom_custom_algorithm_image_builder.yaml",
         "single_account_codepipeline": f"{url}/single_account_codepipeline.yaml",
         "multi_account_codepipeline": f"{url}/multi_account_codepipeline.yaml",
@@ -79,31 +83,25 @@ def get_stack_name(event: Dict[str, Any]) -> str:
     pipeline_type = event.get("pipeline_type")
     pipeline_stack_name = os.environ["PIPELINE_STACK_NAME"]
     model_name = event.get("model_name", "").lower().strip()
-    if pipeline_type in [
-        "byom_realtime_builtin",
-        "byom_realtime_custom",
-        "byom_batch_builtin",
-        "byom_batch_custom",
-    ]:
 
-        postfix = {
-            "byom_realtime_builtin": "BYOMPipelineRealtimeBuiltIn",
-            "byom_realtime_custom": "BYOMPipelineRealtimeCustom",
-            "byom_batch_builtin": "BYOMPipelineBatchBuiltIn",
-            "byom_batch_custom": "BYOMPipelineBatchCustom",
-        }
-        # name of stack
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-{postfix[pipeline_type]}"
+    # create pipeline_type -> postfix map
+    postfix = {
+        "byom_realtime_builtin": "BYOMPipelineRealtimeBuiltIn",
+        "byom_realtime_custom": "BYOMPipelineRealtimeCustom",
+        "byom_batch_builtin": "BYOMPipelineBatchBuiltIn",
+        "byom_batch_custom": "BYOMPipelineBatchCustom",
+        "byom_data_quality_monitor": "BYOMDataQualityMonitor",
+        "byom_model_quality_monitor": "BYOMModelQualityMonitor",
+        "byom_model_bias_monitor": "BYOMModelBiasMonitor",
+        "byom_model_explainability_monitor": "BYOMModelExplainabilityMonitor",
+        "byom_image_builder": "BYOMPipelineImageBuilder",
+    }
 
-    elif pipeline_type == "byom_data_quality_monitor":
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-BYOMDataQualityMonitor"
+    # stack name's infix
+    infix = event.get("image_tag") if pipeline_type == "byom_image_builder" else model_name
 
-    elif pipeline_type == "byom_model_quality_monitor":
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{model_name}-BYOMModelQualityMonitor"
-
-    elif pipeline_type == "byom_image_builder":
-        image_tag = event.get("image_tag")
-        provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{image_tag}-BYOMPipelineImageBuilder"
+    # name of stack
+    provisioned_pipeline_stack_name = f"{pipeline_stack_name}-{infix}-{postfix[pipeline_type]}"
 
     return provisioned_pipeline_stack_name.lower()
 
@@ -118,33 +116,64 @@ def get_template_parameters(event: Dict[str, Any], is_multi_account: bool, stage
         ("KmsKeyArn", kms_key_arn),
         ("BlueprintBucket", os.environ["BLUEPRINT_BUCKET"]),
     ]
-    if pipeline_type in [
-        "byom_realtime_builtin",
-        "byom_realtime_custom",
-        "byom_batch_builtin",
-        "byom_batch_custom",
-    ]:
 
-        common_params.extend(get_common_realtime_batch_params(event, region, stage))
+    # realtime params
+    realtime_params = (
+        [
+            *common_params,
+            *get_common_realtime_batch_params(event, region, stage),
+            *get_realtime_specific_params(event, stage),
+        ]
+        if pipeline_type in ["byom_realtime_builtin", "byom_realtime_custom"]
+        else None
+    )
+    # batch params
+    batch_params = (
+        [
+            *common_params,
+            *get_common_realtime_batch_params(event, region, stage),
+            *get_batch_specific_params(event, stage),
+        ]
+        if pipeline_type in ["byom_batch_builtin", "byom_batch_custom"]
+        else None
+    )
 
-        # add realtime specific parameters
-        if pipeline_type in ["byom_realtime_builtin", "byom_realtime_custom"]:
-            common_params.extend(get_realtime_specific_params(event, stage))
-        # else add batch params
-        else:
-            common_params.extend(get_batch_specific_params(event, stage))
+    # create pipeline_type -> parameters map
+    pipelines_params = {
+        "byom_realtime_builtin": realtime_params,
+        "byom_realtime_custom": realtime_params,
+        "byom_batch_builtin": batch_params,
+        "byom_batch_custom": batch_params,
+        "byom_data_quality_monitor": [*common_params, *get_model_monitor_params(event, region, stage)]
+        if pipeline_type == "byom_data_quality_monitor"
+        else None,
+        "byom_model_quality_monitor": [
+            *common_params,
+            *get_model_monitor_params(event, region, stage, monitoring_type="ModelQuality"),
+        ]
+        if pipeline_type == "byom_model_quality_monitor"
+        else None,
+        "byom_model_bias_monitor": [
+            *common_params,
+            *get_model_monitor_params(event, region, stage, monitoring_type="ModelBias"),
+        ]
+        if pipeline_type == "byom_model_bias_monitor"
+        else None,
+        "byom_model_explainability_monitor": [
+            *common_params,
+            *get_model_monitor_params(event, region, stage, monitoring_type="ModelExplainability"),
+        ]
+        if pipeline_type == "byom_model_explainability_monitor"
+        else None,
+        "byom_image_builder": [*get_image_builder_params(event)] if pipeline_type == "byom_image_builder" else None,
+    }
 
-        return common_params
+    # get the pipeline's paramaters
+    pipeline_params = pipelines_params.get(pipeline_type)
 
-    elif pipeline_type == "byom_data_quality_monitor":
-        return [*common_params, *get_model_monitor_params(event, region, stage)]
-
-    elif pipeline_type == "byom_model_quality_monitor":
-        return [*common_params, *get_model_monitor_params(event, region, stage, monitoring_type="ModelQuality")]
-
-    elif pipeline_type == "byom_image_builder":
-        return get_image_builder_params(event)
-
+    # return the params if not NOne, otherwise throw a BadRequest exception
+    if pipeline_params:
+        return pipeline_params
     else:
         raise BadRequest("Bad request format. Please provide a supported pipeline")
 
@@ -231,9 +260,9 @@ def get_batch_specific_params(event: Dict[str, Any], stage: str) -> List[Tuple[s
     ]
 
 
-def get_built_in_model_monitor_image_uri(region, image_name="model-monitor"):
+def get_built_in_model_monitor_image_uri(region, framework):
     model_monitor_image_uri = sagemaker.image_uris.retrieve(
-        framework=image_name,
+        framework=framework,
         region=region,
     )
 
@@ -248,8 +277,8 @@ def get_model_monitor_params(
     # generate jobs names
     # make sure baseline_job_name and monitoring_schedule_name are <= 63 characters long, especially
     # if endpoint_name was dynamically generated by AWS CDK.
-    baseline_job_name = f"{endpoint_name}-{monitoring_type.lower()}-baseline-{str(uuid.uuid4())[:4]}"
-    monitoring_schedule_name = f"{endpoint_name}-{monitoring_type.lower()}-monitor-{str(uuid.uuid4())[:4]}"
+    baseline_job_name = f"{endpoint_name}-{monitoring_type.lower()}-{str(uuid.uuid4())[:4]}"
+    monitoring_schedule_name = f"{endpoint_name}-{monitoring_type.lower()}-{str(uuid.uuid4())[:4]}"
 
     baseline_job_output_location = clean_param(get_stage_param(event, "baseline_job_output_location", stage))
     data_capture_location = clean_param(get_stage_param(event, "data_capture_location", stage))
@@ -261,6 +290,10 @@ def get_model_monitor_params(
     schedule_expression = get_stage_param(event, "schedule_expression", stage)
     monitor_ground_truth_input = get_stage_param(event, "monitor_ground_truth_input", stage)
 
+    # set the framework based on the monitoring type
+    # DataQuality/ModelQuality -> framework="model-monitor"
+    # ModelBias/ModelExplanability -> framework="clarify"
+    monitor_framework = "model-monitor" if monitoring_type in ["DataQuality", "ModelQuality"] else "clarify"
     monitor_params = [
         ("BaselineJobName", baseline_job_name),
         ("BaselineOutputBucket", baseline_job_output_location.split("/")[0]),
@@ -268,7 +301,7 @@ def get_model_monitor_params(
         ("DataCaptureBucket", data_capture_location.split("/")[0]),
         ("DataCaptureLocation", data_capture_location),
         ("EndpointName", endpoint_name),
-        ("ImageUri", get_built_in_model_monitor_image_uri(region)),
+        ("ImageUri", get_built_in_model_monitor_image_uri(region, framework=monitor_framework)),
         ("InstanceType", instance_type),
         ("InstanceVolumeSize", instance_volume_size),
         ("BaselineMaxRuntimeSeconds", baseline_max_runtime_seconds),
@@ -279,18 +312,61 @@ def get_model_monitor_params(
         ("BaselineData", event.get("baseline_data")),
     ]
 
-    # add ModelQuality parameters
+    # add ModelQuality specific params
     if monitoring_type == "ModelQuality":
         monitor_params.extend(
             [
                 ("BaselineInferenceAttribute", event.get("baseline_inference_attribute", "").strip()),
                 ("BaselineProbabilityAttribute", event.get("baseline_probability_attribute", "").strip()),
                 ("BaselineGroundTruthAttribute", event.get("baseline_ground_truth_attribute", "").strip()),
+            ]
+        )
+    # add ModelQuality parameters, also used by ModelBias/Model
+    if monitoring_type in ["ModelQuality", "ModelBias", "ModelExplainability"]:
+        monitor_params.extend(
+            [
                 ("ProblemType", event.get("problem_type", "").strip()),
                 ("MonitorInferenceAttribute", event.get("monitor_inference_attribute", "").strip()),
                 ("MonitorProbabilityAttribute", event.get("monitor_probability_attribute", "").strip()),
                 ("ProbabilityThresholdAttribute", event.get("probability_threshold_attribute", "").strip()),
-                ("MonitorGroundTruthInput", monitor_ground_truth_input),
+            ]
+        )
+
+    # only add MonitorGroundTruthInput if ModelQuality|ModelBias
+    if monitoring_type in ["ModelQuality", "ModelBias"]:
+        monitor_params.append(("GroundTruthBucket", monitor_ground_truth_input.split("/")[0]))
+        monitor_params.append(("MonitorGroundTruthInput", monitor_ground_truth_input))
+
+    # add ModelBias specific params
+    if monitoring_type == "ModelBias":
+        model_predicted_label_config = event.get("model_predicted_label_config")
+        monitor_params.extend(
+            [
+                (
+                    "ModelPredictedLabelConfig",
+                    json.dumps(model_predicted_label_config) if model_predicted_label_config else "",
+                ),
+                ("BiasConfig", json.dumps(event.get("bias_config"))),
+            ]
+        )
+
+    # add ModelExplainability specific params
+    if monitoring_type == "ModelExplainability":
+        shap_config = event.get("shap_config")
+        model_scores = event.get("model_scores")
+        monitor_params.extend(
+            [
+                ("SHAPConfig", json.dumps(shap_config) if shap_config else ""),
+                ("ExplainabilityModelScores", json.dumps(model_scores) if model_scores else ""),
+            ]
+        )
+
+    # add common params for ModelBias/ModelExplainability
+    if monitoring_type in ["ModelBias", "ModelExplainability"]:
+
+        monitor_params.extend(
+            [
+                ("FeaturesAttribute", event.get("features_attribute", "").strip()),
             ]
         )
 
@@ -398,6 +474,27 @@ def get_image_uri(pipeline_type: str, event: Dict[str, Any], region: str) -> str
 
 
 def get_required_keys(pipeline_type: str, use_model_registry: str, problem_type: str = None) -> List[str]:
+
+    common_keys = ["pipeline_type", "model_name", "inference_instance"]
+    model_location = ["model_artifact_location"]
+    builtin_model_keys = ["model_framework", "model_framework_version"] + model_location
+    custom_model_keys = ["custom_image_uri"] + model_location
+    # if model registry is used
+    if use_model_registry == "Yes":
+        builtin_model_keys = custom_model_keys = ["model_package_name"]
+
+    realtime_specific_keys = ["data_capture_location"]
+    batch_specific_keys = ["batch_inference_data", "batch_job_output_location"]
+
+    # model monitor keys
+    monitors = ["byom_model_quality_monitor", "byom_model_bias_monitor", "byom_model_explainability_monitor"]
+    if pipeline_type in monitors and problem_type not in [
+        "Regression",
+        "MulticlassClassification",
+        "BinaryClassification",
+    ]:
+        raise BadRequest("Bad request format. Unsupported problem_type in byom_model_quality_monitor pipeline")
+
     # common required keys between model monitor types
     common_monitor_keys = [
         "pipeline_type",
@@ -412,68 +509,66 @@ def get_required_keys(pipeline_type: str, use_model_registry: str, problem_type:
         "instance_type",
         "instance_volume_size",
     ]
-    # Realtime/batch pipelines
-    if pipeline_type in [
-        "byom_realtime_builtin",
-        "byom_realtime_custom",
-        "byom_batch_builtin",
-        "byom_batch_custom",
-    ]:
-        common_keys = ["pipeline_type", "model_name", "inference_instance"]
-        model_location = ["model_artifact_location"]
-        builtin_model_keys = ["model_framework", "model_framework_version"] + model_location
-        custom_model_keys = ["custom_image_uri"] + model_location
-        # if model registry is used
-        if use_model_registry == "Yes":
-            builtin_model_keys = custom_model_keys = ["model_package_name"]
 
-        realtime_specific_keys = ["data_capture_location"]
-        batch_specific_keys = ["batch_inference_data", "batch_job_output_location"]
-
-        keys_map = {
-            "byom_realtime_builtin": common_keys + builtin_model_keys + realtime_specific_keys,
-            "byom_realtime_custom": common_keys + custom_model_keys + realtime_specific_keys,
-            "byom_batch_builtin": common_keys + builtin_model_keys + batch_specific_keys,
-            "byom_batch_custom": common_keys + custom_model_keys + batch_specific_keys,
-        }
-
-        return keys_map[pipeline_type]
-
-    # Data Quality Monitor pipeline
-    elif pipeline_type == "byom_data_quality_monitor":
-        return common_monitor_keys
-    # Model Quality Monitor pipeline
+    # ModelQuality specific keys
+    model_quality_keys = ["baseline_inference_attribute", "baseline_ground_truth_attribute"]
+    # common model related monitors
+    common_model_keys = ["problem_type"]
+    # add required keys based on problem type
+    if problem_type in ["Regression", "MulticlassClassification"]:
+        common_model_keys.append("monitor_inference_attribute")
+    # problem_type == "BinaryClassification". Note: depending on the model output,
+    # monitor_inference_attribute, monitor_probability_attribute, and probability_threshold_attribute
+    # can be passed all together, or in pairs
     elif pipeline_type == "byom_model_quality_monitor":
-        common_model_keys = [
-            "baseline_inference_attribute",
-            "baseline_ground_truth_attribute",
-            "problem_type",
-            "monitor_ground_truth_input",
-        ]
-        if problem_type in ["Regression", "MulticlassClassification"]:
-            common_model_keys.append("monitor_inference_attribute")
+        model_quality_keys.append("baseline_probability_attribute")
 
-        elif problem_type == "BinaryClassification":
-            common_model_keys.extend(
-                ["monitor_probability_attribute", "probability_threshold_attribute", "baseline_probability_attribute"]
-            )
+    # shared_model_quality_bias keys
+    shared_model_quality_bias_keys = ["monitor_ground_truth_input"]
 
-        else:
-            raise BadRequest("Bad request format. Unsupported problem_type in byom_model_quality_monitor pipeline")
+    # add model_predicted_label_config if "byom_model_bias_monitor" and
+    # the problem is "BinaryClassification" or "MulticlassClassification"
+    extra_bias_keys = []
+    if pipeline_type == "byom_model_bias_monitor" and problem_type in [
+        "BinaryClassification",
+        "MulticlassClassification",
+    ]:
+        extra_bias_keys.append("model_predicted_label_config")
 
-        return [
+    # create pipeline_type -> required_keys map
+    pipeline_keys_map = {
+        "byom_realtime_builtin": [*common_keys, *builtin_model_keys, *realtime_specific_keys],
+        "byom_realtime_custom": [*common_keys, *custom_model_keys, *realtime_specific_keys],
+        "byom_batch_builtin": [*common_keys, *builtin_model_keys, *batch_specific_keys],
+        "byom_batch_custom": [*common_keys, *custom_model_keys, *batch_specific_keys],
+        "byom_data_quality_monitor": common_monitor_keys,
+        "byom_model_quality_monitor": [
+            *common_monitor_keys,
+            *model_quality_keys,
+            *common_model_keys,
+            *shared_model_quality_bias_keys,
+        ],
+        "byom_model_bias_monitor": [
             *common_monitor_keys,
             *common_model_keys,
-        ]
-    # Image Builder pipeline
-    elif pipeline_type == "byom_image_builder":
-        return [
-            "pipeline_type",
-            "custom_algorithm_docker",
-            "ecr_repo_name",
-            "image_tag",
-        ]
+            *shared_model_quality_bias_keys,
+            *extra_bias_keys,
+            "bias_config",
+        ],
+        "byom_model_explainability_monitor": [
+            *common_monitor_keys,
+            *common_model_keys,
+            "shap_config",
+        ],
+        "byom_image_builder": ["pipeline_type", "custom_algorithm_docker", "ecr_repo_name", "image_tag"],
+    }
 
+    # get the required keys based on the pipeline_type
+    required_keys = pipeline_keys_map.get(pipeline_type)
+
+    # return required_keys if not None. Otherwise, raise BadRequest exception
+    if required_keys:
+        return required_keys
     else:
         raise BadRequest(
             "Bad request format. Pipeline type not supported. Check documentation for API & config formats"
