@@ -42,7 +42,9 @@ def create_sagemaker_monitor_role(
     baseline_job_name,
     monitoring_schedule_name,
     endpoint_name,
+    model_monitor_ground_truth_bucket,
     model_monitor_ground_truth_input,
+    monitoring_type,
 ):
     # create optional policies
     kms_policy = kms_policy_document(scope, "MLOpsKmsPolicy", kms_key_arn)
@@ -54,7 +56,9 @@ def create_sagemaker_monitor_role(
     role = iam.Role(scope, id, assumed_by=iam.ServicePrincipal("sagemaker.amazonaws.com"))
 
     # permissions to create sagemaker resources
-    sagemaker_policy = sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_name, endpoint_name)
+    sagemaker_policy = sagemaker_monitor_policy_statement(
+        baseline_job_name, monitoring_schedule_name, endpoint_name, monitoring_type
+    )
 
     # sagemaker tags permissions
     sagemaker_tags_policy = sagemaker_tags_policy_statement()
@@ -75,9 +79,9 @@ def create_sagemaker_monitor_role(
     )
 
     # add permissions to read ground truth data (only for ModelQuality monitor)
-    if model_monitor_ground_truth_input:
+    if model_monitor_ground_truth_bucket:
         s3_read_resources.extend(
-            [f"arn:aws:s3:::{model_monitor_ground_truth_input}", f"arn:aws:s3:::{model_monitor_ground_truth_input}/*"]
+            [f"arn:aws:s3:::{model_monitor_ground_truth_bucket}", f"arn:aws:s3:::{model_monitor_ground_truth_input}/*"]
         )
     s3_read = s3_policy_read(s3_read_resources)
     s3_write = s3_policy_write(

@@ -77,6 +77,10 @@ from tests.fixtures.orchestrator_fixtures import (
     required_api_byom_realtime_custom,
     required_api_byom_batch_custom,
     api_model_monitor_event,
+    api_model_bias_event,
+    api_model_explainability_event,
+    expected_model_bias_monitor_params,
+    expected_model_explainability_monitor_params,
     required_api_keys_model_monitor,
     template_parameters_common,
     template_parameters_realtime_builtin,
@@ -465,7 +469,14 @@ def test_pipeline_status():
             assert response == expected_response_no_cp
 
 
-def test_get_stack_name(api_byom_event, api_data_quality_event, api_model_quality_event, api_image_builder_event):
+def test_get_stack_name(
+    api_byom_event,
+    api_data_quality_event,
+    api_model_quality_event,
+    api_model_bias_event,
+    api_model_explainability_event,
+    api_image_builder_event,
+):
     # realtime builtin pipeline
     realtime_builtin = api_byom_event("byom_realtime_builtin")
     assert (
@@ -486,6 +497,18 @@ def test_get_stack_name(api_byom_event, api_data_quality_event, api_model_qualit
     assert (
         get_stack_name(api_model_quality_event)
         == f"mlops-pipeline-{api_model_quality_event['model_name']}-byommodelqualitymonitor"
+    )
+
+    # model bias monitor pipeline
+    assert (
+        get_stack_name(api_model_bias_event)
+        == f"mlops-pipeline-{api_model_bias_event['model_name']}-byommodelbiasmonitor"
+    )
+
+    # model explainability monitor pipeline
+    assert (
+        get_stack_name(api_model_explainability_event)
+        == f"mlops-pipeline-{api_model_explainability_event['model_name']}-byommodelexplainabilitymonitor"
     )
 
     # image builder pipeline
@@ -534,6 +557,14 @@ def test_get_required_keys(
     returned_keys = get_required_keys("byom_model_quality_monitor", "No", "BinaryClassification")
     expected_keys = required_api_keys_model_monitor("ModelQuality", "BinaryClassification")
     TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in model bias monitor, problem type BinaryClassification
+    returned_keys = get_required_keys("byom_model_bias_monitor", "No", "BinaryClassification")
+    expected_keys = required_api_keys_model_monitor("ModelBias", "BinaryClassification")
+    TestCase().assertCountEqual(expected_keys, returned_keys)
+    # Required keys in model expainability monitor, problem type Regression
+    returned_keys = get_required_keys("byom_model_explainability_monitor", "No", "Regression")
+    expected_keys = required_api_keys_model_monitor("ModelExplainability", "Regression")
+    TestCase().assertCountEqual(expected_keys, returned_keys)
     # test exception for unsupported problem type
     with pytest.raises(BadRequest) as error:
         get_required_keys("byom_model_quality_monitor", "No", "UnsupportedProblemType")
@@ -567,11 +598,15 @@ def test_get_template_parameters(
     api_image_builder_event,
     api_data_quality_event,
     api_model_quality_event,
+    api_model_bias_event,
+    api_model_explainability_event,
     expected_params_realtime_custom,
     expected_image_builder_params,
     expected_batch_params,
     expected_data_quality_monitor_params,
     expected_model_quality_monitor_params,
+    expected_model_bias_monitor_params,
+    expected_model_explainability_monitor_params,
 ):
     single_event = api_byom_event("byom_realtime_custom", False)
     # realtime pipeline
@@ -584,11 +619,13 @@ def test_get_template_parameters(
         expected_batch_params,
     )
 
+    # additional params used by Model Monitor asserts
+    common_params = [("AssetsBucket", "testassetsbucket"), ("KmsKeyArn", ""), ("BlueprintBucket", "testbucket")]
     # data quality pipeline
     assert len(get_template_parameters(api_data_quality_event, False)) == len(
         [
             *expected_data_quality_monitor_params,
-            *[("AssetsBucket", "testassetsbucket"), ("KmsKeyArn", ""), ("BlueprintBucket", "testbucket")],
+            *common_params,
         ]
     )
 
@@ -596,9 +633,26 @@ def test_get_template_parameters(
     assert len(get_template_parameters(api_model_quality_event, False)) == len(
         [
             *expected_model_quality_monitor_params,
-            *[("AssetsBucket", "testassetsbucket"), ("KmsKeyArn", ""), ("BlueprintBucket", "testbucket")],
+            *common_params,
         ]
     )
+
+    # model bias pipeline
+    assert len(get_template_parameters(api_model_bias_event, False)) == len(
+        [
+            *expected_model_bias_monitor_params,
+            *common_params,
+        ]
+    )
+
+    # model explainability pipeline
+    assert len(get_template_parameters(api_model_explainability_event, False)) == len(
+        [
+            *expected_model_explainability_monitor_params,
+            *common_params,
+        ]
+    )
+
     # test for exception
     with pytest.raises(BadRequest):
         get_template_parameters({"pipeline_type": "unsupported"}, False)
@@ -633,10 +687,20 @@ def test_get_batch_specific_params(api_byom_event, expected_batch_specific_param
 
 
 def test_get_built_in_model_monitor_container_uri():
+    # The 156813124566 is one of the actual account ids for a public Model Monitor Image provided
+    # by the SageMaker service. The reason is I need to provide a valid image URI because the SDK
+    # has validation for the inputs
     # assert the returned value by an actual Model Monitor Image URI for the region.
     assert (
-        get_built_in_model_monitor_image_uri("us-east-1")
+        get_built_in_model_monitor_image_uri("us-east-1", "model-monitor")
         == "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer"
+    )
+    # The 205585389593 is one of the actual account ids for a public Clarify image provided
+    # by the SageMaker service.
+    # assert the returned value by an actual clarify Image URI for the region.
+    assert (
+        get_built_in_model_monitor_image_uri("us-east-1", "clarify")
+        == "205585389593.dkr.ecr.us-east-1.amazonaws.com/sagemaker-clarify-processing:1.0"
     )
 
 

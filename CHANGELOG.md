@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2022-01-24
+
+### Added
+
+- A new pipeline to deploy [Amazon SageMaker Clarify Model Bias Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-model-monitor-bias-drift.html). The new pipeline monitors predictions for bias on a regular basis, and generates
+  alerts if bias beyond a certain threshold is detected.
+- A new pipeline to deploy [Amazon SageMaker Clarify Explainability (Feature Attribution Drift) Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-model-monitor-feature-attribution-drift.html). The new pipeline helps data scientists and ML engineers
+  monitor predictions for feature attribution drift on a regular basis.
+
+### Updated
+
+- The solution's name was changed from "AWS MLOps Framework" to "MLOps Workload Orchestrator".
+
 ## [1.4.1] - 2021-12-20
 
 ### Added
@@ -23,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A new pipeline to deploy [AWS SageMaker Model Quality Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-model-quality.html). The new pipeline monitors the performance of a deployed model by comparing the
+- A new pipeline to deploy [Amazon SageMaker Model Quality Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-model-quality.html). The new pipeline monitors the performance of a deployed model by comparing the
   predictions that the model makes with the actual ground truth labels that the model attempts to predict.
 
 ### Updated

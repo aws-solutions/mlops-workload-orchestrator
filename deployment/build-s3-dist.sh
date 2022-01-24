@@ -115,6 +115,10 @@ echo "cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_qua
 cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false
 echo "cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false"
 cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false
 echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false"
 cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false
 echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false"
@@ -132,6 +136,10 @@ echo "sed -i -e $replace lib/blueprints/byom/byom_data_quality_monitor.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_data_quality_monitor.yaml
 echo "sed -i -e $replace lib/blueprints/byom/byom_model_quality_monitor.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_model_quality_monitor.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_model_bias_monitor.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_model_bias_monitor.yaml
+echo "sed -i -e $replace lib/blueprints/byom/byom_model_explainability_monitor.yaml"
+sed -i -e $replace lib/blueprints/byom/byom_model_explainability_monitor.yaml
 echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml
 echo "sed -i -e $replace lib/blueprints/byom/single_account_codepipeline.yaml"
@@ -144,10 +152,10 @@ echo "sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml
 
 # Run 'cdk synth' for main templates to generate raw solution outputs
-echo "cdk synth aws-mlops-single-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir"
-cdk synth aws-mlops-single-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir
-echo "cdk synth aws-mlops-multi-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir"
-cdk synth aws-mlops-multi-account-framework --path-metadata false --version-reporting false --output=$staging_dist_dir
+echo "cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
+cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir
+echo "cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
+cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --output=$staging_dist_dir
 
 # Remove unnecessary output files
 echo "cd $staging_dist_dir"
@@ -187,20 +195,20 @@ cd $template_dist_dir
 echo "Updating code source bucket in template with $1"
 replace="s/%%BUCKET_NAME%%/$1/g"
 
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template
+echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template"
+sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template
+echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template"
+sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template
 replace="s/%%SOLUTION_NAME%%/$2/g"
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework"
-sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template
+echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account"
+sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template
+echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template"
+sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template
 replace="s/%%VERSION%%/$3/g"
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-single-account-framework.template
-echo "sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template"
-sed -i -e $replace $template_dist_dir/aws-mlops-multi-account-framework.template
+echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template"
+sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template
+echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template"
+sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template
 
 
 echo "------------------------------------------------------------------------------"
