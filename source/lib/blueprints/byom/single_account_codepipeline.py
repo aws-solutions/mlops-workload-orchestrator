@@ -14,7 +14,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_sns as sns,
-    aws_sns_subscriptions as subscriptions,
     aws_events_targets as targets,
     aws_events as events,
     aws_codepipeline as codepipeline,
@@ -26,7 +25,6 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     pipeline_permissions,
     suppress_pipeline_bucket,
     suppress_iam_complex,
-    suppress_sns,
     suppress_cloudformation_action,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import ParameteresFactory as pf
@@ -37,24 +35,19 @@ class SingleAccountCodePipelineStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        notification_email = pf.create_notification_email_parameter(self)
         template_zip_name = pf.create_template_zip_name_parameter(self)
         template_file_name = pf.create_template_file_name_parameter(self)
         template_params_file_name = pf.create_stage_params_file_name_parameter(self, "TemplateParamsName", "main")
         assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
         stack_name = pf.create_stack_name_parameter(self)
+        sns_topic_arn = pf.create_sns_topic_arn_parameter(self)
 
         # Resources #
         assets_bucket = s3.Bucket.from_bucket_name(self, "ImportedAssetsBucket", assets_bucket_name.value_as_string)
 
-        # create sns topic and subscription
-        pipeline_notification_topic = sns.Topic(
-            self,
-            "SinglePipelineNotification",
-        )
-        pipeline_notification_topic.node.default_child.cfn_options.metadata = suppress_sns()
-        pipeline_notification_topic.add_subscription(
-            subscriptions.EmailSubscription(email_address=notification_email.value_as_string)
+        # import the sns Topic
+        pipeline_notification_topic = sns.Topic.from_topic_arn(
+            self, "SinglePipelineNotification", sns_topic_arn.value_as_string
         )
 
         # Defining pipeline stages
@@ -112,10 +105,16 @@ class SingleAccountCodePipelineStack(core.Stack):
             )
         )
 
-        # add cfn suppressions
-        pipeline_child_nodes = single_account_pipeline.node.find_all()
-        pipeline_child_nodes[1].node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
-        pipeline_child_nodes[6].node.default_child.cfn_options.metadata = suppress_iam_complex()
+        # add ArtifactBucket cfn supression (not needing a logging bucket)
+        single_account_pipeline.node.find_child(
+            "ArtifactsBucket"
+        ).node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
+
+        # add supression for complex policy
+        single_account_pipeline.node.find_child("Role").node.find_child(
+            "DefaultPolicy"
+        ).node.default_child.cfn_options.metadata = suppress_iam_complex()
+
         # attaching iam permissions to the pipelines
         pipeline_permissions(single_account_pipeline, assets_bucket)
 

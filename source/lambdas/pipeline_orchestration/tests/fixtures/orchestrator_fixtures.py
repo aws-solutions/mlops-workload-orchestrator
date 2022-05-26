@@ -56,6 +56,7 @@ def mock_env_variables():
             group_name="personal_status_sex",
         )
     )
+    os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"] = "test-topic-arn"
 
 
 @pytest.fixture
@@ -193,6 +194,39 @@ def api_image_builder_event():
 
 
 @pytest.fixture
+def api_training_event():
+    def _api_training_event(pipeline_type):
+        training_event = {
+            "pipeline_type": pipeline_type,
+            "model_name": "testmodel",
+            "job_name": "test-job",
+            "training_data": "train/data.csv",
+            "target_attribute": "target",
+            "job_output_location": "training-output",
+            "algo_hyperparamaters": dict(eval_metric="auc", objective="binary:logistic", num_round=400, rate_drop=0.3),
+            "tuner_configs": dict(
+                early_stopping_type="Auto",
+                objective_metric_name="validation:auc",
+                strategy="Bayesian",
+                objective_type="Maximize",
+                max_jobs=10,
+                max_parallel_jobs=2,
+            ),
+            "hyperparamaters_ranges": dict(
+                eta=["continuous", [0.1, 0.5]],
+                gamma=["continuous", [0, 5]],
+                min_child_weight=["continuous", [0, 120]],
+                max_depth=["integer", [1, 15]],
+                optimizer=["categorical", ["sgd", "Adam"]],
+            ),
+        }
+
+        return training_event
+
+    return _api_training_event
+
+
+@pytest.fixture
 def expected_params_realtime_custom():
     def _expected_params_realtime_custom(endpoint_name_provided=False):
         endpoint_name = "test-endpoint" if endpoint_name_provided else ""
@@ -304,7 +338,7 @@ def expected_common_realtime_batch_params():
 @pytest.fixture
 def expected_image_builder_params():
     return [
-        ("NotificationEmail", os.environ["NOTIFICATION_EMAIL"]),
+        ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
         ("AssetsBucket", "testassetsbucket"),
         ("CustomImage", os.environ["CUSTOMIMAGE"]),
         ("ECRRepoName", "mlops-ecrrep"),
@@ -325,7 +359,7 @@ def expected_realtime_specific_params():
 def expect_single_account_params_format():
     return {
         "Parameters": {
-            "NotificationEmail": os.environ["NOTIFICATION_EMAIL"],
+            "NotificationsSNSTopicArn": os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"],
             "AssetsBucket": "testassetsbucket",
             "CustomImage": os.environ["CUSTOMIMAGE"],
             "ECRRepoName": "mlops-ecrrep",
@@ -347,7 +381,7 @@ def stack_id():
 @pytest.fixture
 def expected_multi_account_params_format():
     return [
-        {"ParameterKey": "NotificationEmail", "ParameterValue": os.environ["NOTIFICATION_EMAIL"]},
+        {"ParameterKey": "NotificationsSNSTopicArn", "ParameterValue": os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]},
         {"ParameterKey": "AssetsBucket", "ParameterValue": "testassetsbucket"},
         {"ParameterKey": "CustomImage", "ParameterValue": os.environ["CUSTOMIMAGE"]},
         {"ParameterKey": "ECRRepoName", "ParameterValue": "mlops-ecrrep"},
@@ -551,8 +585,8 @@ def template_parameters_common():
     def _template_parameters_common(event):
         template_parameters = [
             {
-                "ParameterKey": "NOTIFICATIONEMAIL",
-                "ParameterValue": os.environ["NOTIFICATION_EMAIL"],
+                "ParameterKey": "NotificationsSNSTopicArn",
+                "ParameterValue": os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"],
                 "UsePreviousValue": True,
             },
             {
@@ -683,8 +717,8 @@ def template_parameters_model_monitor(generate_names):
         baseline_job_name, monitoring_schedule_name = generate_names("test-endpoint", "dataquality")
         template_parameters = [
             {
-                "ParameterKey": "NOTIFICATIONEMAIL",
-                "ParameterValue": os.environ["NOTIFICATION_EMAIL"],
+                "ParameterKey": "NotificationsSNSTopicArn",
+                "ParameterValue": os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"],
                 "UsePreviousValue": True,
             },
             {

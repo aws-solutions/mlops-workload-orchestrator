@@ -90,6 +90,7 @@ from tests.fixtures.orchestrator_fixtures import (
     template_parameters_model_monitor,
     get_parameters_keys,
     cf_client_params,
+    api_training_event,
 )
 
 
@@ -594,7 +595,7 @@ def test_get_stage_param(api_byom_event):
 
 
 def test_get_template_parameters(
-    api_byom_event,
+    api_byom_event,  # NOSONAR:S107 this function is designed to take many arguments
     api_image_builder_event,
     api_data_quality_event,
     api_model_quality_event,
@@ -607,6 +608,7 @@ def test_get_template_parameters(
     expected_model_quality_monitor_params,
     expected_model_bias_monitor_params,
     expected_model_explainability_monitor_params,
+    api_training_event,
 ):
     single_event = api_byom_event("byom_realtime_custom", False)
     # realtime pipeline
@@ -652,6 +654,20 @@ def test_get_template_parameters(
             *common_params,
         ]
     )
+
+    # autopilot templeate params single account
+    assert len(get_template_parameters(api_training_event("model_autopilot_training"), False)) == 16
+
+    # autopilot templeate params multi account
+    assert len(get_template_parameters(api_training_event("model_autopilot_training"), True)) == 16
+
+    with patch("lambda_helpers.sagemaker.image_uris.retrieve") as patched_uri:
+        patched_uri.return_value = "algo-image"
+        # training pipeline params
+        assert len(get_template_parameters(api_training_event("model_training_builtin"), True)) == 24
+
+        # hyperparameter tuning
+        assert len(get_template_parameters(api_training_event("model_tuner_builtin"), True)) == 26
 
     # test for exception
     with pytest.raises(BadRequest):
@@ -794,7 +810,7 @@ def test_create_template_zip_file(
 
 def test_get_codepipeline_params():
     common_params = [
-        ("NotificationEmail", "test@example.com"),
+        ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
         ("TemplateZipFileName", "template_zip_name"),
         ("TemplateFileName", "template_file_name"),
         ("AssetsBucket", "testassetsbucket"),
@@ -802,7 +818,9 @@ def test_get_codepipeline_params():
     ]
     # multi account codepipeline
     TestCase().assertEqual(
-        get_codepipeline_params("True", "stack_name", "template_zip_name", "template_file_name"),
+        get_codepipeline_params(
+            "True", "byom_realtime_builtin", "stack_name", "template_zip_name", "template_file_name"
+        ),
         common_params
         + [
             ("DevParamsName", "dev_template_params.json"),
@@ -818,9 +836,20 @@ def test_get_codepipeline_params():
             ("DelegatedAdminAccount", "No"),
         ],
     )
+
+    # test training pipeline with multi-account
+    TestCase().assertEqual(
+        get_codepipeline_params(
+            "True", "model_training_builtin", "stack_name", "template_zip_name", "template_file_name"
+        ),
+        common_params + [("TemplateParamsName", "template_params.json")],
+    )
+
     # single account codepipeline
     TestCase().assertEqual(
-        get_codepipeline_params("False", "stack_name", "template_zip_name", "template_file_name"),
+        get_codepipeline_params(
+            "False", "byom_realtime_builtin", "stack_name", "template_zip_name", "template_file_name"
+        ),
         common_params + [("TemplateParamsName", "template_params.json")],
     )
 

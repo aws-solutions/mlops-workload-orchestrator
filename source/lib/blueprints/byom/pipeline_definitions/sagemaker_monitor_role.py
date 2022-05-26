@@ -68,12 +68,12 @@ def create_sagemaker_monitor_role(
     s3_read_resources = list(
         set(  # set is used since a same bucket can be used more than once
             [
-                f"arn:aws:s3:::{assets_bucket_name}",
-                f"arn:aws:s3:::{assets_bucket_name}/*",
-                f"arn:aws:s3:::{data_capture_bucket}",
-                f"arn:aws:s3:::{data_capture_s3_location}/*",
-                f"arn:aws:s3:::{baseline_output_bucket}",
-                f"arn:aws:s3:::{baseline_job_output_location}/*",
+                f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket_name}",
+                f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket_name}/*",
+                f"arn:{core.Aws.PARTITION}:s3:::{data_capture_bucket}",
+                f"arn:{core.Aws.PARTITION}:s3:::{data_capture_s3_location}/*",
+                f"arn:{core.Aws.PARTITION}:s3:::{baseline_output_bucket}",
+                f"arn:{core.Aws.PARTITION}:s3:::{baseline_job_output_location}/*",
             ]
         )
     )
@@ -81,12 +81,15 @@ def create_sagemaker_monitor_role(
     # add permissions to read ground truth data (only for ModelQuality monitor)
     if model_monitor_ground_truth_bucket:
         s3_read_resources.extend(
-            [f"arn:aws:s3:::{model_monitor_ground_truth_bucket}", f"arn:aws:s3:::{model_monitor_ground_truth_input}/*"]
+            [
+                f"arn:{core.Aws.PARTITION}:s3:::{model_monitor_ground_truth_bucket}",
+                f"arn:{core.Aws.PARTITION}:s3:::{model_monitor_ground_truth_input}/*"
+            ]
         )
     s3_read = s3_policy_read(s3_read_resources)
     s3_write = s3_policy_write(
         [
-            f"arn:aws:s3:::{output_s3_location}/*",
+            f"arn:{core.Aws.PARTITION}:s3:::{output_s3_location}/*",
         ]
     )
     # IAM PassRole permission

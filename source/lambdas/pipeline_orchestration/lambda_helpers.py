@@ -18,13 +18,16 @@ import tempfile
 import uuid
 from typing import Dict, List, Tuple, Union, Any
 from botocore.client import BaseClient
-from shared.wrappers import BadRequest
+from shared.wrappers import BadRequest, exception_handler
 from shared.logger import get_logger
 
 
 logger = get_logger(__name__)
 
+TRAINING_PIPELINES = ["model_autopilot_training", "model_training_builtin", "model_tuner_builtin"]
 
+
+@exception_handler
 def template_url(pipeline_type: str) -> str:
     """
     template_url is a helper function that determines the cloudformation stack's file name based on
@@ -62,6 +65,9 @@ def template_url(pipeline_type: str) -> str:
         "byom_image_builder": f"{url}/byom_custom_algorithm_image_builder.yaml",
         "single_account_codepipeline": f"{url}/single_account_codepipeline.yaml",
         "multi_account_codepipeline": f"{url}/multi_account_codepipeline.yaml",
+        "model_training_builtin": "blueprints/byom/model_training_pipeline.yaml",
+        "model_tuner_builtin": "blueprints/byom/model_hyperparameter_tunning_pipeline.yaml",
+        "model_autopilot_training": "blueprints/byom/autopilot_training_pipeline.yaml",
     }
 
     if pipeline_type in list(templates_map.keys()):
@@ -71,6 +77,7 @@ def template_url(pipeline_type: str) -> str:
         raise BadRequest(f"Bad request. Pipeline type: {pipeline_type} is not supported.")
 
 
+@exception_handler
 def get_stage_param(event: Dict[str, Any], api_key: str, stage: str) -> str:
     api_key_value = event.get(api_key, "")
     if isinstance(api_key_value, dict) and stage in list(api_key_value.keys()):
@@ -79,6 +86,7 @@ def get_stage_param(event: Dict[str, Any], api_key: str, stage: str) -> str:
     return api_key_value
 
 
+@exception_handler
 def get_stack_name(event: Dict[str, Any]) -> str:
     pipeline_type = event.get("pipeline_type")
     pipeline_stack_name = os.environ["PIPELINE_STACK_NAME"]
@@ -95,6 +103,9 @@ def get_stack_name(event: Dict[str, Any]) -> str:
         "byom_model_bias_monitor": "BYOMModelBiasMonitor",
         "byom_model_explainability_monitor": "BYOMModelExplainabilityMonitor",
         "byom_image_builder": "BYOMPipelineImageBuilder",
+        "model_training_builtin": "ModelTraining",
+        "model_tuner_builtin": "TunerTraining",
+        "model_autopilot_training": "AutopilotTraining",
     }
 
     # stack name's infix
@@ -106,6 +117,7 @@ def get_stack_name(event: Dict[str, Any]) -> str:
     return provisioned_pipeline_stack_name.lower()
 
 
+@exception_handler
 def get_template_parameters(event: Dict[str, Any], is_multi_account: bool, stage: str = None) -> List[Tuple[str, str]]:
     pipeline_type = event.get("pipeline_type")
     region = os.environ["REGION"]
@@ -138,6 +150,13 @@ def get_template_parameters(event: Dict[str, Any], is_multi_account: bool, stage
         else None
     )
 
+    # if job_name is not provided by the customer (for training pipelines), generate one
+    if pipeline_type in TRAINING_PIPELINES:
+        job_name = event.get(
+            "job_name",
+            f"{event.get('model_name')}-{event.get('pipeline_type').split('_')[1]}-{str(uuid.uuid4())[:4]}",
+        )
+
     # create pipeline_type -> parameters map
     pipelines_params = {
         "byom_realtime_builtin": realtime_params,
@@ -166,6 +185,15 @@ def get_template_parameters(event: Dict[str, Any], is_multi_account: bool, stage
         if pipeline_type == "byom_model_explainability_monitor"
         else None,
         "byom_image_builder": [*get_image_builder_params(event)] if pipeline_type == "byom_image_builder" else None,
+        "model_autopilot_training": [*common_params, *get_autopilot_specifc_params(event, job_name)]
+        if pipeline_type == "model_autopilot_training"
+        else None,
+        "model_training_builtin": [*common_params, *get_model_training_specifc_params(event, job_name)]
+        if pipeline_type == "model_training_builtin"
+        else None,
+        "model_tuner_builtin": [*common_params, *get_model_tuner_specifc_params(event, job_name)]
+        if pipeline_type == "model_tuner_builtin"
+        else None,
     }
 
     # get the pipeline's paramaters
@@ -178,18 +206,23 @@ def get_template_parameters(event: Dict[str, Any], is_multi_account: bool, stage
         raise BadRequest("Bad request format. Please provide a supported pipeline")
 
 
+@exception_handler
 def get_codepipeline_params(
-    is_multi_account: str, stack_name: str, template_zip_name: str, template_file_name: str
+    is_multi_account: str, pipeline_type: str, stack_name: str, template_zip_name: str, template_file_name: str
 ) -> List[Tuple[str, str]]:
 
     single_account_params = [
-        ("NotificationEmail", os.environ["NOTIFICATION_EMAIL"]),
+        ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
         ("TemplateZipFileName", template_zip_name),
         ("TemplateFileName", template_file_name),
         ("AssetsBucket", os.environ["ASSETS_BUCKET"]),
         ("StackName", stack_name),
     ]
-    if is_multi_account == "False":
+    if is_multi_account == "False" or pipeline_type in [
+        "model_training_builtin",
+        "model_tuner_builtin",
+        "model_autopilot_training",
+    ]:
         single_account_params.extend([("TemplateParamsName", "template_params.json")])
         return single_account_params
 
@@ -213,6 +246,7 @@ def get_codepipeline_params(
         return single_account_params
 
 
+@exception_handler
 def get_common_realtime_batch_params(event: Dict[str, Any], region: str, stage: str) -> List[Tuple[str, str]]:
     inference_instance = get_stage_param(event, "inference_instance", stage)
     image_uri = (
@@ -236,6 +270,7 @@ def get_common_realtime_batch_params(event: Dict[str, Any], region: str, stage: 
     ]
 
 
+@exception_handler
 def clean_param(param: str) -> str:
     # if the paramter's value ends with '/', remove it
     if param.endswith("/"):
@@ -244,12 +279,14 @@ def clean_param(param: str) -> str:
         return param
 
 
+@exception_handler
 def get_realtime_specific_params(event: Dict[str, Any], stage: str) -> List[Tuple[str, str]]:
     data_capture_location = clean_param(get_stage_param(event, "data_capture_location", stage))
     endpoint_name = get_stage_param(event, "endpoint_name", stage).lower().strip()
     return [("DataCaptureLocation", data_capture_location), ("EndpointName", endpoint_name)]
 
 
+@exception_handler
 def get_batch_specific_params(event: Dict[str, Any], stage: str) -> List[Tuple[str, str]]:
     batch_inference_data = get_stage_param(event, "batch_inference_data", stage)
     batch_job_output_location = clean_param(get_stage_param(event, "batch_job_output_location", stage))
@@ -260,6 +297,7 @@ def get_batch_specific_params(event: Dict[str, Any], stage: str) -> List[Tuple[s
     ]
 
 
+@exception_handler
 def get_built_in_model_monitor_image_uri(region, framework):
     model_monitor_image_uri = sagemaker.image_uris.retrieve(
         framework=framework,
@@ -269,6 +307,7 @@ def get_built_in_model_monitor_image_uri(region, framework):
     return model_monitor_image_uri
 
 
+@exception_handler
 def get_model_monitor_params(
     event: Dict[str, Any], region: str, stage: str, monitoring_type: str = "DataQuality"
 ) -> List[Tuple[str, str]]:
@@ -283,9 +322,9 @@ def get_model_monitor_params(
     baseline_job_output_location = clean_param(get_stage_param(event, "baseline_job_output_location", stage))
     data_capture_location = clean_param(get_stage_param(event, "data_capture_location", stage))
     instance_type = get_stage_param(event, "instance_type", stage)
-    instance_volume_size = get_stage_param(event, "instance_volume_size", stage)
-    baseline_max_runtime_seconds = get_stage_param(event, "baseline_max_runtime_seconds", stage)
-    monitor_max_runtime_seconds = get_stage_param(event, "monitor_max_runtime_seconds", stage)
+    instance_volume_size = str(get_stage_param(event, "instance_volume_size", stage))
+    baseline_max_runtime_seconds = str(get_stage_param(event, "baseline_max_runtime_seconds", stage))
+    monitor_max_runtime_seconds = str(get_stage_param(event, "monitor_max_runtime_seconds", stage))
     monitoring_output_location = clean_param(get_stage_param(event, "monitoring_output_location", stage))
     schedule_expression = get_stage_param(event, "schedule_expression", stage)
     monitor_ground_truth_input = get_stage_param(event, "monitor_ground_truth_input", stage)
@@ -373,9 +412,10 @@ def get_model_monitor_params(
     return monitor_params
 
 
+@exception_handler
 def get_image_builder_params(event: Dict[str, Any]) -> List[Tuple[str, str]]:
     return [
-        ("NotificationEmail", os.environ["NOTIFICATION_EMAIL"]),
+        ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
         ("AssetsBucket", os.environ["ASSETS_BUCKET"]),
         ("CustomImage", event.get("custom_algorithm_docker")),
         ("ECRRepoName", event.get("ecr_repo_name")),
@@ -383,6 +423,67 @@ def get_image_builder_params(event: Dict[str, Any]) -> List[Tuple[str, str]]:
     ]
 
 
+@exception_handler
+def get_autopilot_specifc_params(event: Dict[str, Any], job_name: str) -> List[Tuple[str, str]]:
+    return [
+        ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
+        ("JobName", job_name),
+        ("ProblemType", event.get("problem_type", "")),
+        ("AutopilotJobObjective", event.get("job_objective", "")),
+        ("TrainingData", event.get("training_data")),
+        ("TargetAttribute", event.get("target_attribute")),
+        ("JobOutputLocation", clean_param(event.get("job_output_location"))),
+        ("CompressionType", event.get("compression_type", "")),
+        ("AutopilotMaxCandidates", str(event.get("job_max_candidates", "10"))),
+        ("EncryptInnerTraffic", event.get("encrypt_inner_traffic", "True")),
+        ("MaxRuntimePerJob", str(event.get("max_runtime_per_job", "86400"))),
+        ("AutopilotTotalRuntime", str(event.get("total_max_runtime", "2592000"))),
+        ("GenerateDefinitionsOnly", event.get("generate_definition_only", "False")),
+    ]
+
+
+@exception_handler
+def get_model_training_specifc_params(event: Dict[str, Any], job_name: str) -> List[Tuple[str, str]]:
+    return [
+        ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
+        ("JobName", job_name),
+        (
+            "ImageUri",
+            get_image_uri(event.get("pipeline_type"), event, os.environ["REGION"])
+            if os.environ["USE_MODEL_REGISTRY"] == "No"
+            else "",
+        ),
+        ("InstanceType", event.get("instance_type", "ml.m4.xlarge")),
+        ("JobInstanceCount", str(event.get("instance_count", "1"))),
+        ("InstanceVolumeSize", str(event.get("instance_volume_size", "20"))),
+        ("JobOutputLocation", clean_param(event.get("job_output_location"))),
+        ("TrainingData", clean_param(event.get("training_data"))),
+        ("ValidationData", clean_param(event.get("validation_data", ""))),
+        ("EncryptInnerTraffic", event.get("encrypt_inner_traffic", "True")),
+        ("MaxRuntimePerJob", str(event.get("max_runtime_per_job", "86400"))),
+        ("UseSpotInstances", event.get("use_spot_instances", "True")),
+        ("MaxWaitTimeForSpotInstances", str(event.get("max_wait_time_spot_instances", "172800"))),
+        ("ContentType", event.get("content_type", "csv")),
+        ("S3DataType", event.get("s3_data_type", "S3Prefix")),
+        ("DataDistribution", event.get("data_distribution", "FullyReplicated")),
+        ("CompressionType", event.get("compression_type", "")),
+        ("DataInputMode", event.get("data_input_mode", "File")),
+        ("DataRecordWrapping", event.get("data_record_wrapping", "")),
+        ("AttributeNames", event.get("attribute_names", "")),
+        ("AlgoHyperparameteres", json.dumps(event.get("algo_hyperparamaters"))),
+    ]
+
+
+@exception_handler
+def get_model_tuner_specifc_params(event: Dict[str, Any], job_name: str) -> List[Tuple[str, str]]:
+    return [
+        *get_model_training_specifc_params(event, job_name),
+        ("HyperparametersTunerConfig", json.dumps(event.get("tuner_configs"))),
+        ("AlgoHyperparameteresRange", json.dumps(event.get("hyperparamaters_ranges"))),
+    ]
+
+
+@exception_handler
 def format_template_parameters(
     key_value_list: List[str], is_multi_account: str
 ) -> Union[List[Dict[str, str]], Dict[str, Dict[str, str]]]:
@@ -396,19 +497,23 @@ def format_template_parameters(
         return {"Parameters": {param[0]: param[1] for param in key_value_list}}
 
 
+@exception_handler
 def write_params_to_json(params: Union[List[Dict[str, str]], Dict[str, Dict[str, str]]], file_path: str) -> None:
     with open(file_path, "w") as fp:
         json.dump(params, fp, indent=4)
 
 
+@exception_handler
 def upload_file_to_s3(local_file_path: str, s3_bucket_name: str, s3_file_key: str, s3_client: BaseClient) -> None:
     s3_client.upload_file(local_file_path, s3_bucket_name, s3_file_key)
 
 
+@exception_handler
 def download_file_from_s3(s3_bucket_name: str, file_key: str, local_file_path: str, s3_client: BaseClient) -> None:
     s3_client.download_file(s3_bucket_name, file_key, local_file_path)
 
 
+@exception_handler
 def create_template_zip_file(
     event: Dict[str, Any],
     blueprint_bucket: str,
@@ -435,15 +540,15 @@ def create_template_zip_file(
     download_file_from_s3(blueprint_bucket, template_url, f"{local_directory}/{template_url.split('/')[-1]}", s3_client)
 
     # write the params to json file(s)
-    if is_multi_account == "True":
+    if is_multi_account == "True" and event.get("pipeline_type") not in TRAINING_PIPELINES:
         for stage in ["dev", "staging", "prod"]:
             # format the template params
             stage_params_list = get_template_parameters(event, is_multi_account, stage)
             params_formated = format_template_parameters(stage_params_list, is_multi_account)
             write_params_to_json(params_formated, f"{local_directory}/{stage}_template_params.json")
     else:
-        stage_params_list = get_template_parameters(event, is_multi_account)
-        params_formated = format_template_parameters(stage_params_list, is_multi_account)
+        stage_params_list = get_template_parameters(event, "False")
+        params_formated = format_template_parameters(stage_params_list, "False")
         write_params_to_json(params_formated, f"{local_directory}/template_params.json")
 
     # make the zip file
@@ -462,10 +567,16 @@ def create_template_zip_file(
     )
 
 
+@exception_handler
 def get_image_uri(pipeline_type: str, event: Dict[str, Any], region: str) -> str:
     if pipeline_type in ["byom_realtime_custom", "byom_batch_custom"]:
         return event.get("custom_image_uri")
-    elif pipeline_type in ["byom_realtime_builtin", "byom_batch_builtin"]:
+    elif pipeline_type in [
+        "byom_realtime_builtin",
+        "byom_batch_builtin",
+        "model_training_builtin",
+        "model_tuner_builtin",
+    ]:
         return sagemaker.image_uris.retrieve(
             framework=event.get("model_framework"), region=region, version=event.get("model_framework_version")
         )
@@ -473,12 +584,24 @@ def get_image_uri(pipeline_type: str, event: Dict[str, Any], region: str) -> str
         raise ValueError("Unsupported pipeline by get_image_uri function")
 
 
+@exception_handler
 def get_required_keys(pipeline_type: str, use_model_registry: str, problem_type: str = None) -> List[str]:
 
     common_keys = ["pipeline_type", "model_name", "inference_instance"]
     model_location = ["model_artifact_location"]
     builtin_model_keys = ["model_framework", "model_framework_version"] + model_location
     custom_model_keys = ["custom_image_uri"] + model_location
+    common_training_keys = ["training_data", "job_output_location"]
+
+    # define required leys for training pipelines
+    model_training_keys = [
+        *common_keys[:2],
+        *common_training_keys,
+        *builtin_model_keys[:2],
+        "algo_hyperparamaters",
+    ]
+    model_tuner_keys = [*model_training_keys, "tuner_configs", "hyperparamaters_ranges"]
+    autopilot_keys = [*common_keys[:2], *common_training_keys, "target_attribute"]
     # if model registry is used
     if use_model_registry == "Yes":
         builtin_model_keys = custom_model_keys = ["model_package_name"]
@@ -561,6 +684,9 @@ def get_required_keys(pipeline_type: str, use_model_registry: str, problem_type:
             "shap_config",
         ],
         "byom_image_builder": ["pipeline_type", "custom_algorithm_docker", "ecr_repo_name", "image_tag"],
+        "model_training_builtin": model_training_keys,
+        "model_tuner_builtin": model_tuner_keys,
+        "model_autopilot_training": autopilot_keys,
     }
 
     # get the required keys based on the pipeline_type
@@ -575,6 +701,7 @@ def get_required_keys(pipeline_type: str, use_model_registry: str, problem_type:
         )
 
 
+@exception_handler
 def validate(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     validate is a helper function that checks if all required input parameters are present in the handler's event object

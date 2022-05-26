@@ -1,5 +1,5 @@
-# #####################################################################################################################
-#  Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                            #
+#######################################################################################################################
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.                                                 #
 #                                                                                                                     #
 #  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance     #
 #  with the License. A copy of the License is located at                                                              #
@@ -10,23 +10,19 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-from aws_cdk import (
-    aws_codepipeline_actions as codepipeline_actions,
-)
+from unittest.mock import patch
+from unittest import TestCase
+from tests.fixtures.autopilot_fixtures import mocked_job_name, mocked_autopilot_env_vars, mocked_automl_config
 
 
-def approval_action(approval_name, sns_topic, description):
-    """
-    approval_action configures a codepipeline manual approval
+@patch("main.AutoML")
+@patch("main.Session")
+@patch("main.get_client")
+def test_handler(
+    mocked_client, mocked_session, mocked_automl, mocked_job_name, mocked_autopilot_env_vars, mocked_automl_config
+):
+    mocked_client.boto_region_name = "us-east-1"
+    from main import handler
 
-    :approval_name: name of the manual approval action
-    :sns_topic: sns topic to use for notifications
-    :description: description of the manual approval action
-    :return: codepipeline action in a form of a CDK object that can be attached to a codepipeline stage
-    """
-    return codepipeline_actions.ManualApprovalAction(
-        action_name=approval_name,
-        notification_topic=sns_topic,
-        additional_information=description,
-        run_order=2,
-    )
+    handler(None, None)
+    mocked_automl.asseert_called_with(**mocked_automl_config)
