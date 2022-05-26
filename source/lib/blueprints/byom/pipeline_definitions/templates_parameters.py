@@ -157,7 +157,7 @@ class ParameteresFactory:
             "CustomAlgorithmsECRRepoArn",
             type="String",
             description="The arn of the Amazon ECR repository where custom algorithm image is stored (optional)",
-            allowed_pattern="(^arn:aws:ecr:(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\\d:\\d{12}:repository/.+|^$)",
+            allowed_pattern="(^arn:(aws|aws-cn|aws-us-gov):ecr:(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\\d:\\d{12}:repository/.+|^$)",
             constraint_description="Please enter valid ECR repo ARN",
             min_length=0,
             max_length=2048,
@@ -170,7 +170,7 @@ class ParameteresFactory:
             "KmsKeyArn",
             type="String",
             description="The KMS ARN to encrypt the output of the batch transform job and instance volume (optional).",
-            allowed_pattern="(^arn:aws:kms:(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d:\d{12}:key/.+|^$)",
+            allowed_pattern="(^arn:(aws|aws-cn|aws-us-gov):kms:(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d:\d{12}:key/.+|^$)",
             constraint_description="Please enter kmsKey ARN",
             min_length=0,
             max_length=2048,
@@ -311,7 +311,7 @@ class ParameteresFactory:
             scope,
             "InstanceVolumeSize",
             type="Number",
-            description="Instance volume size used in model monitoring jobs. E.g., 20",
+            description="Instance volume size used by the job. E.g., 20",
         )
 
     @staticmethod
@@ -374,6 +374,16 @@ class ParameteresFactory:
         )
 
     @staticmethod
+    def create_sns_topic_arn_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "NotificationsSNSTopicArn",
+            type="String",
+            allowed_pattern="^arn:\\S+:sns:\\S+:\\d{12}:\\S+$",
+            description="AWS SNS Topics arn used by the MLOps Workload Orchestrator to notify the administrator.",
+        )
+
+    @staticmethod
     def create_template_file_name_parameter(scope: core.Construct) -> core.CfnParameter:
         return core.CfnParameter(
             scope,
@@ -421,6 +431,18 @@ class ParameteresFactory:
     def create_image_tag_parameter(scope: core.Construct) -> core.CfnParameter:
         return core.CfnParameter(
             scope, "ImageTag", type="String", description="Docker image tag for the custom algorithm", min_length=1
+        )
+
+    @staticmethod
+    def create_autopilot_job_name_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "JobName",
+            type="String",
+            allowed_pattern="^[a-zA-Z0-9](-*[a-zA-Z0-9]){0,62}",
+            description="Unique name of the training job",
+            min_length=1,
+            max_length=63,
         )
 
     @staticmethod
@@ -491,10 +513,10 @@ class ParameteresFactory:
     def create_instance_count_parameter(scope: core.Construct) -> core.CfnParameter:
         return core.CfnParameter(
             scope,
-            "MonitoringJobInstanceCount",
+            "JobInstanceCount",
             type="Number",
             default="1",
-            description="Instance count used by model monitoring job. For example, 1",
+            description="Instance count used by the job. For example, 1",
         )
 
     @staticmethod
@@ -518,12 +540,295 @@ class ParameteresFactory:
         )
 
     @staticmethod
+    def create_autopilot_problem_type_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "ProblemType",
+            type="String",
+            default="",
+            allowed_values=["", "Regression", "BinaryClassification", "MulticlassClassification"],
+            description=(
+                "Optional Problem type. Possible values: Regression | BinaryClassification | MulticlassClassification. "
+                "If not provided, the Autopilot will infere the probelm type from the target attribute. "
+                "Note: if ProblemType is provided, the AutopilotJobObjective must be provided too."
+            ),
+        )
+
+    @staticmethod
     def create_inference_attribute_parameter(scope: core.Construct, job_type: str) -> core.CfnParameter:
         return core.CfnParameter(
             scope,
             f"{job_type}InferenceAttribute",
             type="String",
             description="Index or JSONpath to locate predicted label(s)",
+        )
+
+    @staticmethod
+    def create_job_objective_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AutopilotJobObjective",
+            type="String",
+            default="",
+            allowed_values=["", "Accuracy", "MSE", "F1", "F1macro", "AUC"],
+            description=(
+                "Optional metric to optimize. If not provided, F1: used or binary classification, "
+                "Accuracy: used for multiclass classification, and MSE: used for regression. "
+                "Note: if AutopilotJobObjective is provided, the ProblemType must be provided too."
+            ),
+        )
+
+    @staticmethod
+    def create_max_runtime_per_job_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "MaxRuntimePerJob",
+            type="Number",
+            default=86400,
+            description="Max runtime (in seconds) allowed per training job ",
+            min_value=600,
+            max_value=259200,
+        )
+
+    @staticmethod
+    def create_total_job_runtime_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AutopilotTotalRuntime",
+            type="Number",
+            default=2592000,
+            description="Autopilot total runtime (in seconds) allowed for the job",
+            min_value=3600,
+            max_value=2592000,
+        )
+
+    @staticmethod
+    def create_training_data_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "TrainingData",
+            type="String",
+            description="Training data key (located in the Assets bucket)",
+            allowed_pattern=".*",
+            min_length=1,
+            max_length=128,
+        )
+
+    @staticmethod
+    def create_validation_data_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "ValidationData",
+            type="String",
+            description="Optional Validation data S3 key (located in the Assets bucket)",
+            allowed_pattern=".*",
+            min_length=0,
+            max_length=128,
+        )
+
+    @staticmethod
+    def create_content_type_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "ContentType",
+            type="String",
+            default="csv",
+            allowed_pattern=".*",
+            description="The MIME type of the training data.",
+            max_length=256,
+        )
+
+    @staticmethod
+    def create_s3_data_type_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "S3DataType",
+            type="String",
+            default="S3Prefix",
+            allowed_values=["S3Prefix", "ManifestFile", "AugmentedManifestFile"],
+            description="Training S3 data type. S3Prefix | ManifestFile | AugmentedManifestFile.",
+        )
+
+    @staticmethod
+    def create_data_distribution_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "DataDistribution",
+            type="String",
+            default="FullyReplicated",
+            allowed_values=["FullyReplicated", "ShardedByS3Key"],
+            description="Data distribution. FullyReplicated | ShardedByS3Key.",
+        )
+
+    @staticmethod
+    def create_data_input_mode_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "DataInputMode",
+            type="String",
+            default="File",
+            allowed_values=["File", "Pipe", "FastFile"],
+            description="Training data input mode. File | Pipe | FastFile.",
+        )
+
+    @staticmethod
+    def create_data_record_wrapping_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "DataRecordWrapping",
+            type="String",
+            default="",
+            allowed_values=["", "RecordIO"],
+            description="Optional training data record wrapping: RecordIO. ",
+        )
+
+    @staticmethod
+    def create_target_attribute_name_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "TargetAttribute",
+            type="String",
+            description="Target attribute name in the training data",
+            allowed_pattern=".*",
+            min_length=1,
+            max_length=128,
+        )
+
+    @staticmethod
+    def create_max_wait_time_for_spot_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "MaxWaitTimeForSpotInstances",
+            type="Number",
+            default=172800,
+            description=(
+                "Max wait time (in seconds) for Spot instances (required if use_spot_instances = True). "
+                "Must be greater than MaxRuntimePerJob."
+            ),
+            min_value=1,
+            max_value=259200,
+        )
+
+    @staticmethod
+    def create_job_output_location_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "JobOutputLocation",
+            type="String",
+            description="S3 output prefix (located in the Assets bucket)",
+            allowed_pattern=".*",
+            min_length=1,
+            max_length=128,
+        )
+
+    @staticmethod
+    def create_encrypt_inner_traffic_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "EncryptInnerTraffic",
+            type="String",
+            default="True",
+            allowed_values=["True", "False"],
+            description="Encrypt inner-container traffic for the job",
+        )
+
+    @staticmethod
+    def create_generate_definitions_only_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "GenerateDefinitionsOnly",
+            type="String",
+            default="False",
+            allowed_values=["True", "False"],
+            description="generate candidate definitions only by the autopilot job",
+        )
+
+    @staticmethod
+    def create_compression_type_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "CompressionType",
+            type="String",
+            default="",
+            allowed_values=["", "Gzip"],
+            description="Optional compression type for the training data",
+        )
+
+    @staticmethod
+    def create_max_candidates_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AutopilotMaxCandidates",
+            default=10,
+            type="Number",
+            description="Max number of candidates to be tried by teh autopilot job",
+            min_value=1,
+        )
+
+    @staticmethod
+    def create_use_spot_instances_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "UseSpotInstances",
+            type="String",
+            default="True",
+            allowed_values=["True", "False"],
+            description="Use managed spot instances with the training job.",
+        )
+
+    @staticmethod
+    def create_hyperparameters_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AlgoHyperparameteres",
+            type="String",
+            description="Algorithm hyperparameters provided as a json object",
+            allowed_pattern="^\\{(.*:.*)+\\}$",
+        )
+
+    @staticmethod
+    def create_attribute_names_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AttributeNames",
+            type="String",
+            description=(
+                "Optional list of one or more attribute names to use that are found in "
+                "a specified AugmentedManifestFile (if S3DataType='AugmentedManifestFile')"
+            ),
+            allowed_pattern="(^\\[.*\\]$|^$)",
+        )
+
+    @staticmethod
+    def create_tuner_config_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "HyperparametersTunerConfig",
+            type="String",
+            description=(
+                "sagemaker.tuner.HyperparameterTuner configs (objective_metric_name, metric_definitions, strategy, "
+                "objective_type, max_jobs, max_parallel_jobs, base_tuning_job_name=None, early_stopping_type) "
+                "provided as a json object. Note: some has default values and are not required to be specified. "
+                "Example: {'early_stopping_type' = 'Auto', 'objective_metric_name' = 'validation:auc', 'max_jobs' = 10, 'max_parallel_jobs' = 2}"
+            ),
+            allowed_pattern="^\\{(.*:.*)+\\}$",
+        )
+
+    @staticmethod
+    def create_hyperparameters_range_parameter(scope: core.Construct) -> core.CfnParameter:
+        return core.CfnParameter(
+            scope,
+            "AlgoHyperparameteresRange",
+            type="String",
+            description=(
+                "Algorithm hyperparameters range used by the Hyperparameters job provided as a json object, "
+                "where the key is hyperparameter name, and the value is list with the first item the type "
+                "('continuous'|'integer'|'categorical')  and the second item is a list of [min_value, max_value] for "
+                "'continuous'|'integer' and a list of values for 'categorical'. "
+                'Example: {"min_child_weight": ["continuous",[0, 120]], "max_depth": ["integer",[1, 15]], "optimizer": '
+                '["categorical", ["sgd", "Adam"]])}'
+            ),
+            allowed_pattern='^\{.*:\s*\[\s*("continuous"|"integer"|"categorical")\s*,\s*\[.*\]\s*\]+\s*\}$',
         )
 
     @staticmethod

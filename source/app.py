@@ -19,6 +19,8 @@ from lib.blueprints.byom.byom_batch_pipeline import BYOMBatchStack
 from lib.blueprints.byom.single_account_codepipeline import SingleAccountCodePipelineStack
 from lib.blueprints.byom.multi_account_codepipeline import MultiAccountCodePipelineStack
 from lib.blueprints.byom.byom_custom_algorithm_image_builder import BYOMCustomAlgorithmImageBuilderStack
+from lib.blueprints.byom.autopilot_training_pipeline import AutopilotJobStack
+from lib.blueprints.byom.model_training_pipeline import TrainingJobStack
 from lib.aws_sdk_config_aspect import AwsSDKConfigAspect
 from lib.blueprints.byom.pipeline_definitions.cdk_context_value import get_cdk_context_value
 
@@ -56,7 +58,9 @@ BYOMCustomAlgorithmImageBuilderStack(
 batch_stack = BYOMBatchStack(
     app,
     "BYOMBatchStack",
-    description=(f"({solution_id}byom-bt) - BYOM Batch Transform pipeline in AWS MLOps Framework. Version {version}"),
+    description=(
+        f"({solution_id}byom-bt) - BYOM Batch Transform pipeline in MLOps Workload Orchestrator. Version {version}"
+    ),
 )
 
 core.Aspects.of(batch_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentBatch", solution_id, version))
@@ -112,6 +116,38 @@ realtime_stack = BYOMRealtimePipelineStack(
 )
 
 core.Aspects.of(realtime_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentRealtime", solution_id, version))
+
+
+autopilot_stack = AutopilotJobStack(
+    app,
+    "AutopilotJobStack",
+    description=(f"({solution_id}-autopilot) - Autopilot training pipeline. Version {version}"),
+)
+
+core.Aspects.of(autopilot_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentAutopilot", solution_id, version))
+
+
+training_stack = TrainingJobStack(
+    app,
+    "TrainingJobStack",
+    training_type="TrainingJob",
+    description=(f"({solution_id}-training) - Model Training pipeline. Version {version}"),
+)
+
+core.Aspects.of(training_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentTraining", solution_id, version))
+
+
+hyperparameter_tunning_stack = TrainingJobStack(
+    app,
+    "HyperparamaterTunningJobStack",
+    training_type="HyperparameterTuningJob",
+    description=(f"({solution_id}-tuner) - Model Hyperparameter Tunning pipeline. Version {version}"),
+)
+
+core.Aspects.of(hyperparameter_tunning_stack).add(
+    AwsSDKConfigAspect(app, "SDKUserAgentHyperparamater", solution_id, version)
+)
+
 
 SingleAccountCodePipelineStack(
     app,

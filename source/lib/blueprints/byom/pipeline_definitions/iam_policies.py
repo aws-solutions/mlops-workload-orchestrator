@@ -17,7 +17,10 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_delegated_admin_policy,
 )
 
-sagemaker_arn_prefix = f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}"
+sagemaker_arn_prefix = core.Fn.sub(
+    "arn:${PARTITION}:sagemaker:${REGION}:${ACCOUNT_ID}",
+    {"PARTITION": core.Aws.PARTITION, "REGION": core.Aws.REGION, "ACCOUNT_ID": core.Aws.ACCOUNT_ID},
+)
 
 
 def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_name_provided):
@@ -35,7 +38,7 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
                 "sagemaker:CreateEndpointConfig",
                 "sagemaker:DescribeEndpointConfig",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DeleteEndpointConfig",
-                "sagemaker:CreateEndpoint",
+                "sagemaker:CreateEndpoint",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DescribeEndpoint",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DeleteEndpoint",
             ]
@@ -54,6 +57,7 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
             ]
         )
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,  # NOSONAR: effect is repeated for readability
         actions=actions,
         resources=resources,
     )
@@ -62,6 +66,7 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
 def baseline_lambda_get_model_name_policy(endpoint_name):
     # these permissions are required to get the ModelName used by the monitored endpoint
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "sagemaker:DescribeModel",
             "sagemaker:DescribeEndpointConfig",
@@ -78,6 +83,7 @@ def baseline_lambda_get_model_name_policy(endpoint_name):
 def sagemaker_model_bias_explainability_baseline_job_policy():
     # required to create/delete a Shadow endpointConfig/Endpoint created by the sagemaker clarify
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "sagemaker:DescribeModel",
             "sagemaker:DescribeEndpointConfig",
@@ -86,7 +92,7 @@ def sagemaker_model_bias_explainability_baseline_job_policy():
             "sagemaker:CreateEndpoint",
             "sagemaker:DeleteEndpointConfig",
             "sagemaker:DeleteEndpoint",
-            "sagemaker:InvokeEndpoint",
+            "sagemaker:InvokeEndpoint",  # NOSONAR: permission needs to be repeated for clarity
         ],
         resources=[
             f"{sagemaker_arn_prefix}:endpoint-config/sagemaker-clarify-endpoint-config*",
@@ -97,6 +103,7 @@ def sagemaker_model_bias_explainability_baseline_job_policy():
 
 def sagemaker_baseline_job_policy(baseline_job_name):
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=["sagemaker:CreateProcessingJob", "sagemaker:DescribeProcessingJob", "sagemaker:StopProcessingJob"],
         resources=[
             f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}",
@@ -106,10 +113,52 @@ def sagemaker_baseline_job_policy(baseline_job_name):
 
 def batch_transform_policy():
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "sagemaker:CreateTransformJob",
         ],
         resources=[f"{sagemaker_arn_prefix}:transform-job/mlopssagemakermodel-*-batch-transform-*"],
+    )
+
+
+def autopilot_job_policy(job_name):
+    return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        actions=["sagemaker:CreateAutoMLJob"],
+        resources=[f"{sagemaker_arn_prefix}:automl-job/{job_name}"],
+    )
+
+
+def training_job_policy(job_name, job_type):
+    actions_map = {
+        "TrainingJob": "sagemaker:CreateTrainingJob",
+        "HyperparameterTuningJob": "sagemaker:CreateHyperParameterTuningJob",
+    }
+    resources_map = {
+        "TrainingJob": f"{sagemaker_arn_prefix}:training-job/{job_name}",
+        "HyperparameterTuningJob": f"{sagemaker_arn_prefix}:hyper-parameter-tuning-job/{job_name}",
+    }
+    return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        actions=[actions_map[job_type]],
+        resources=[resources_map[job_type]],
+    )
+
+
+def autopilot_job_endpoint_policy(job_name):
+    return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        actions=[
+            "sagemaker:DescribeModel",
+            "sagemaker:DescribeEndpointConfig",
+            "sagemaker:DescribeEndpoint",
+            "sagemaker:InvokeEndpoint",
+        ],
+        resources=[
+            f"{sagemaker_arn_prefix}:model/{job_name}*",
+            f"{sagemaker_arn_prefix}:endpoint-config/{job_name}*",
+            f"{sagemaker_arn_prefix}:endpoint/{job_name}*",
+        ],
     )
 
 
@@ -184,6 +233,7 @@ def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_na
 
     # create the policy statement
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=actions,
         resources=resources,
     )
@@ -191,6 +241,7 @@ def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_na
 
 def sagemaker_tags_policy_statement():
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "sagemaker:AddTags",
             "sagemaker:DeleteTags",
@@ -205,6 +256,7 @@ def sagemaker_logs_metrics_policy_document(scope, id):
         id,
         statements=[
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "logs:CreateLogGroup",
                     "logs:CreateLogStream",
@@ -217,6 +269,7 @@ def sagemaker_logs_metrics_policy_document(scope, id):
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "cloudwatch:PutMetricData",
                 ],
@@ -231,6 +284,7 @@ def sagemaker_logs_metrics_policy_document(scope, id):
 
 def s3_policy_read_write(resources_list):
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "s3:GetObject",
             "s3:PutObject",  # NOSONAR: permission needs to be repeated for clarity
@@ -242,6 +296,7 @@ def s3_policy_read_write(resources_list):
 
 def s3_policy_read(resources_list, principals=None):
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         principals=principals,
         actions=["s3:GetObject", "s3:ListBucket"],
         resources=resources_list,
@@ -395,6 +450,7 @@ def model_package_group_policy(model_package_group_name, accounts_list):
 
 def cloudformation_stackset_policy(stack_name, account_id):
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "cloudformation:DescribeStackSet",
             "cloudformation:DescribeStackInstance",
@@ -407,23 +463,24 @@ def cloudformation_stackset_policy(stack_name, account_id):
             # is used by the solution (default). Otherwise, core.Aws.ACCOUNT_ID used.
             # more info on CF StackSets with delegated admin account can be found here:
             # https://docs.amazonaws.cn/en_us/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html
-            f"arn:aws:cloudformation:{core.Aws.REGION}:{account_id}:stackset/{stack_name}:*",
-            "arn:aws:cloudformation:*::type/resource/*",
+            f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}:{account_id}:stackset/{stack_name}:*",
+            f"arn:{core.Aws.PARTITION}:cloudformation:*::type/resource/*",
         ],
     )
 
 
 def cloudformation_stackset_instances_policy(stack_name, account_id):
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=[
             "cloudformation:CreateStackInstances",
             "cloudformation:DeleteStackInstances",
             "cloudformation:UpdateStackSet",
         ],
         resources=[
-            f"arn:aws:cloudformation::{account_id}:stackset-target/{stack_name}:*",
-            f"arn:aws:cloudformation:{core.Aws.REGION}::type/resource/*",
-            f"arn:aws:cloudformation:{core.Aws.REGION}:{account_id}:stackset/{stack_name}:*",
+            f"arn:{core.Aws.PARTITION}:cloudformation::{account_id}:stackset-target/{stack_name}:*",
+            f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}::type/resource/*",
+            f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}:{account_id}:stackset/{stack_name}:*",
         ],
     )
 
@@ -434,6 +491,7 @@ def delegated_admin_policy_document(scope, id):
         id,
         statements=[
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=["organizations:ListDelegatedAdministrators"],
                 resources=["*"],
             )
@@ -457,6 +515,7 @@ def create_orchestrator_policy(
         "lambdaOrchestratorPolicy",
         statements=[
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "cloudformation:CreateStack",
                     "cloudformation:DeleteStack",
@@ -472,6 +531,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "iam:CreateRole",
                     "iam:DeleteRole",
@@ -482,10 +542,13 @@ def create_orchestrator_policy(
                     "iam:PutRolePolicy",
                     "iam:AttachRolePolicy",
                     "iam:DetachRolePolicy",
+                    "iam:UntagRole",
+                    "iam:TagRole",
                 ],
                 resources=[f"arn:{core.Aws.PARTITION}:iam::{core.Aws.ACCOUNT_ID}:role/{pipeline_stack_name}*"],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "ecr:CreateRepository",
                     "ecr:DescribeRepositories",  # NOSONAR: permission needs to be repeated for clarity
@@ -498,6 +561,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "codebuild:CreateProject",
                     "codebuild:DeleteProject",
@@ -516,6 +580,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "lambda:CreateFunction",
                     "lambda:DeleteFunction",
@@ -543,12 +608,15 @@ def create_orchestrator_policy(
                 ]
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "codepipeline:CreatePipeline",
                     "codepipeline:UpdatePipeline",
                     "codepipeline:DeletePipeline",
                     "codepipeline:GetPipeline",
                     "codepipeline:GetPipelineState",
+                    "codepipeline:TagResource",
+                    "codepipeline:UntagResource",
                 ],
                 resources=[
                     (
@@ -558,6 +626,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "apigateway:POST",
                     "apigateway:PATCH",
@@ -574,6 +643,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "logs:CreateLogGroup",
                     "logs:DescribeLogGroups",
@@ -583,6 +653,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "s3:CreateBucket",
                     "s3:PutEncryptionConfiguration",
@@ -593,12 +664,14 @@ def create_orchestrator_policy(
                 resources=[f"arn:{core.Aws.PARTITION}:s3:::*"],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "s3:PutObject",  # NOSONAR: permission needs to be repeated for clarity
                 ],
                 resources=[f"arn:{core.Aws.PARTITION}:s3:::{assets_s3_bucket_name}/*"],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "sns:CreateTopic",
                     "sns:DeleteTopic",
@@ -615,6 +688,7 @@ def create_orchestrator_policy(
                 ],
             ),
             iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
                 actions=[
                     "events:PutRule",
                     "events:DescribeRule",
@@ -634,6 +708,7 @@ def create_orchestrator_policy(
 
 def create_invoke_lambda_policy(lambda_functions_list):
     return iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
         actions=["lambda:InvokeFunction"],  # NOSONAR: permission needs to be repeated for clarity
         resources=lambda_functions_list,
     )

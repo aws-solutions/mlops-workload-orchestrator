@@ -9,7 +9,7 @@ across projects and organizations, the processes contain commonalities across us
 
 The solution helps you streamline and enforce architecture best practices by providing an extendable
 framework for managing ML pipelines for Amazon Machine Learning (Amazon ML) services and third-party
-services. The solution’s template allows you to upload trained models, configure the orchestration of
+services. The solution’s template allows you to train models, upload trained models, configure the orchestration of
 the pipeline, initiate the start of the deployment process, move models through different stages of
 deployment, and monitor the successes and failures of the operations. The solution also provides a
 pipeline for building and registering Docker images for custom algorithms that can be used for model
@@ -23,7 +23,7 @@ increases your team’s agility and efficiency by allowing them to repeat succes
 #### Benefits
 
 - **Leverage a pre-configured machine learning pipeline:** Use the solution's reference architecture to initiate a pre-configured pipeline through an API call or a Git repository.
-- **Automatically deploy a trained model and inference endpoint:** Use the solution's framework to automate the model monitor pipeline or the Amazon SageMaker BYOM pipeline. Deliver an inference endpoint with model drift detection packaged as a serverless microservice.
+- **Automatically train, deploy, and monitor models:** Use the solution's pipelines to automate the model training. Deliver an inference endpoint with model drift detection packaged as a serverless microservice.
 
 ---
 

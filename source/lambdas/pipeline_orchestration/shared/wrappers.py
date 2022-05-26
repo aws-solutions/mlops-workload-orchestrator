@@ -13,6 +13,7 @@
 import json
 import sys
 import os
+from typing import Any, Callable
 import traceback
 from functools import wraps
 import botocore
@@ -61,3 +62,28 @@ def api_exception_handler(f):
             return handle_exception("An Unexpected Server side exception occurred", e, 500)
 
     return wrapper
+
+
+def exception_handler(func: Callable[..., Any]) -> Any:
+    """
+    Docorator function to handle exceptions
+
+    Args:
+        func (object): function to be decorated
+
+    Returns:
+        func's return value
+
+    Raises:
+        Exception thrown by the decorated function
+    """
+
+    def wrapper_function(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+
+        except Exception as e:
+            logger.error(f"Error in {func.__name__}: {str(e)}")
+            raise e
+
+    return wrapper_function

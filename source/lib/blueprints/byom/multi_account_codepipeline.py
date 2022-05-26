@@ -14,7 +14,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_sns as sns,
-    aws_sns_subscriptions as subscriptions,
     aws_events_targets as targets,
     aws_events as events,
     aws_codepipeline as codepipeline,
@@ -29,7 +28,6 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_list_function_policy,
     suppress_pipeline_bucket,
     suppress_iam_complex,
-    suppress_sns,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
     ParameteresFactory as pf,
@@ -42,12 +40,13 @@ class MultiAccountCodePipelineStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        notification_email = pf.create_notification_email_parameter(self)
         template_zip_name = pf.create_template_zip_name_parameter(self)
         template_file_name = pf.create_template_file_name_parameter(self)
         dev_params_file_name = pf.create_stage_params_file_name_parameter(self, "DevParamsName", "development")
         staging_params_file_name = pf.create_stage_params_file_name_parameter(self, "StagingParamsName", "staging")
         prod_params_file_name = pf.create_stage_params_file_name_parameter(self, "ProdParamsName", "production")
+        mlops_sns_topic_arn = pf.create_sns_topic_arn_parameter(self)
+
         # create development parameters
         account_type = "development"
         dev_account_id = pf.create_account_id_parameter(self, "DevAccountId", account_type)
@@ -77,14 +76,9 @@ class MultiAccountCodePipelineStack(core.Stack):
             self, "ImportedBlueprintBucket", blueprint_bucket_name.value_as_string
         )
 
-        # create sns topic and subscription
-        pipeline_notification_topic = sns.Topic(
-            self,
-            "PipelineNotification",
-        )
-        pipeline_notification_topic.node.default_child.cfn_options.metadata = suppress_sns()
-        pipeline_notification_topic.add_subscription(
-            subscriptions.EmailSubscription(email_address=notification_email.value_as_string)
+        # import the sns Topic
+        pipeline_notification_topic = sns.Topic.from_topic_arn(
+            self, "PipelineNotification", mlops_sns_topic_arn.value_as_string
         )
 
         # Defining pipeline stages
@@ -118,7 +112,6 @@ class MultiAccountCodePipelineStack(core.Stack):
         deploy_staging_approval = approval_action(
             "DeployStaging",
             pipeline_notification_topic,
-            [notification_email.value_as_string],
             "Please approve to deploy to staging account",
         )
 
@@ -143,7 +136,6 @@ class MultiAccountCodePipelineStack(core.Stack):
         deploy_prod_approval = approval_action(
             "DeployProd",
             pipeline_notification_topic,
-            [notification_email.value_as_string],
             "Please approve to deploy to production account",
         )
 
@@ -197,6 +189,7 @@ class MultiAccountCodePipelineStack(core.Stack):
             stages=[source_stage, deploy_dev_stage, deploy_staging_stage, deploy_prod_stage],
             cross_account_keys=False,
         )
+
         # add notification to the development stackset action
         dev_stackset_action.on_state_change(
             "NotifyUserDevDeployment",
@@ -272,17 +265,32 @@ class MultiAccountCodePipelineStack(core.Stack):
             )
         )
 
-        # add lambda permissons
+        # add lambda permissions
         multi_account_pipeline.add_to_role_policy(invoke_lambdas_policy)
 
-        # add cfn supressions
+        # add cfn suppressions for Lambda:ListFunctions * resource
+        multi_account_pipeline.node.find_child("DeployDev").node.find_child("DeployDevStackSet").node.find_child(
+            "CodePipelineActionRole"
+        ).node.find_child("DefaultPolicy").node.default_child.cfn_options.metadata = suppress_list_function_policy()
+        multi_account_pipeline.node.find_child("DeployStaging").node.find_child(
+            "DeployStagingStackSet"
+        ).node.find_child("CodePipelineActionRole").node.find_child(
+            "DefaultPolicy"
+        ).node.default_child.cfn_options.metadata = suppress_list_function_policy()
 
-        pipeline_child_nodes = multi_account_pipeline.node.find_all()
-        pipeline_child_nodes[1].node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
-        pipeline_child_nodes[6].node.default_child.cfn_options.metadata = suppress_iam_complex()
-        pipeline_child_nodes[19].node.default_child.cfn_options.metadata = suppress_list_function_policy()
-        pipeline_child_nodes[32].node.default_child.cfn_options.metadata = suppress_list_function_policy()
-        pipeline_child_nodes[45].node.default_child.cfn_options.metadata = suppress_list_function_policy()
+        multi_account_pipeline.node.find_child("DeployProd").node.find_child("DeployProdStackSet").node.find_child(
+            "CodePipelineActionRole"
+        ).node.find_child("DefaultPolicy").node.default_child.cfn_options.metadata = suppress_list_function_policy()
+
+        # add supression for complex policy
+        multi_account_pipeline.node.find_child("Role").node.find_child(
+            "DefaultPolicy"
+        ).node.default_child.cfn_options.metadata = suppress_iam_complex()
+
+        # add ArtifactBucket cfn supression (not needing a logging bucket)
+        multi_account_pipeline.node.find_child(
+            "ArtifactsBucket"
+        ).node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
         # attaching iam permissions to the pipelines
         pipeline_permissions(multi_account_pipeline, assets_bucket)
 

@@ -15,6 +15,8 @@ from aws_cdk import (
     aws_lambda as lambda_,
     aws_codepipeline_actions as codepipeline_actions,
     aws_cloudformation as cloudformation,
+    aws_events as events,
+    aws_events_targets as targets,
     core,
 )
 from lib.blueprints.byom.pipeline_definitions.helpers import (
@@ -37,6 +39,9 @@ from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     cloudformation_stackset_instances_policy,
     kms_policy_document,
     delegated_admin_policy_document,
+    autopilot_job_policy,
+    autopilot_job_endpoint_policy,
+    training_job_policy,
 )
 
 
@@ -96,17 +101,18 @@ def batch_transform(
         list(
             set(
                 [
-                    f"arn:aws:s3:::{assets_bucket.bucket_name}",
-                    f"arn:aws:s3:::{assets_bucket.bucket_name}/*",
-                    f"arn:aws:s3:::{batch_input_bucket}",
-                    f"arn:aws:s3:::{batch_inference_data}",
+                    f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}",
+                    f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}/*",
+                    f"arn:{core.Aws.PARTITION}:s3:::{batch_input_bucket}",
+                    f"arn:{core.Aws.PARTITION}:s3:::{batch_inference_data}",
                 ]
             )
         )
     )
+
     s3_write = s3_policy_write(
         [
-            f"arn:aws:s3:::{batch_job_output_location}/*",
+            f"arn:{core.Aws.PARTITION}:s3:::{batch_job_output_location}/*",
         ]
     )
 
@@ -115,7 +121,7 @@ def batch_transform(
     lambda_role = create_service_role(
         scope,
         "batch_transform_lambda_role",
-        "lambda.amazonaws.com",
+        lambda_service,
         (
             "Role that creates a lambda function assumes to create a sagemaker batch transform "
             "job in the aws mlops pipeline."
@@ -131,7 +137,7 @@ def batch_transform(
         scope,
         id,
         runtime=lambda_.Runtime.PYTHON_3_8,
-        handler="main.handler",
+        handler=lambda_handler,
         layers=[sm_layer],
         role=lambda_role,
         code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/batch_transform.zip"),
@@ -217,15 +223,15 @@ def create_baseline_job_lambda(
     """
     s3_read = s3_policy_read(
         [
-            f"arn:aws:s3:::{assets_bucket.bucket_name}",
-            f"arn:aws:s3:::{assets_bucket.bucket_name}/*",  # give access to files used by different monitors
-            f"arn:aws:s3:::{baseline_output_bucket}",
-            f"arn:aws:s3:::{baseline_output_bucket}/*",
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}",
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}/*",  # give access to files used by different monitors
+            f"arn:{core.Aws.PARTITION}:s3:::{baseline_output_bucket}",
+            f"arn:{core.Aws.PARTITION}:s3:::{baseline_output_bucket}/*",
         ]
     )
     s3_write = s3_policy_write(
         [
-            f"arn:aws:s3:::{baseline_job_output_location}/*",
+            f"arn:{core.Aws.PARTITION}:s3:::{baseline_job_output_location}/*",
         ]
     )
 
@@ -242,14 +248,18 @@ def create_baseline_job_lambda(
     sagemaker_role = create_service_role(
         scope,
         "create_baseline_sagemaker_role",
-        "sagemaker.amazonaws.com",
+        "sagemaker.amazonaws.com",  # NOSONAR: repeated for clarity
         "Role that is create sagemaker model Lambda function assumes to create a baseline job.",
     )
     # attach the conditional policies
     kms_policy.attach_to_role(sagemaker_role)
 
     # create a trust relation to assume the Role
-    sagemaker_role.add_to_policy(iam.PolicyStatement(actions=["sts:AssumeRole"], resources=[sagemaker_role.role_arn]))
+    sagemaker_role.add_to_policy(
+        iam.PolicyStatement(
+            actions=["sts:AssumeRole"], resources=[sagemaker_role.role_arn]  # NOSONAR: repeated for clarity
+        )
+    )
     # creating a role so that this lambda can create a baseline job
     lambda_role = create_service_role(
         scope,
@@ -269,7 +279,11 @@ def create_baseline_job_lambda(
     sagemaker_role.add_to_policy(s3_write)
     sagemaker_role_nodes = sagemaker_role.node.find_all()
     sagemaker_role_nodes[2].node.default_child.cfn_options.metadata = suppress_pipeline_policy()
-    lambda_role.add_to_policy(iam.PolicyStatement(actions=["iam:PassRole"], resources=[sagemaker_role.role_arn]))
+    lambda_role.add_to_policy(
+        iam.PolicyStatement(
+            actions=["iam:PassRole"], resources=[sagemaker_role.role_arn]  # NOSONAR: repeated for clarity
+        )
+    )
     lambda_role.add_to_policy(create_baseline_job_policy)
     lambda_role.add_to_policy(s3_write)
     lambda_role.add_to_policy(s3_read)
@@ -554,7 +568,9 @@ def create_copy_assets_lambda(scope, blueprint_repository_bucket_name):
     custom_resource_lambda_fn.node.default_child.cfn_options.metadata = suppress_lambda_policies()
     # grant permission to download the file from the source bucket
     custom_resource_lambda_fn.add_to_role_policy(
-        s3_policy_read([f"arn:aws:s3:::{source_bucket}", f"arn:aws:s3:::{source_bucket}/*"])
+        s3_policy_read(
+            [f"arn:{core.Aws.PARTITION}:s3:::{source_bucket}", f"arn:{core.Aws.PARTITION}:s3:::{source_bucket}/*"]
+        )
     )
 
     return custom_resource_lambda_fn
@@ -621,3 +637,285 @@ def create_send_data_custom_resource(scope, helper_function_arn, properties):
         properties=properties,
         resource_type="Custom::AnonymousData",
     )
+
+
+def autopilot_training_job(
+    scope,  # NOSONAR:S107 this function is designed to take many arguments
+    id,
+    blueprint_bucket,
+    assets_bucket,
+    job_name,
+    training_data,
+    target_attribute_name,
+    job_output_location,
+    problem_type,
+    job_objective,
+    compression_type,
+    max_candidates,
+    kms_key_arn,
+    encrypt_inter_container_traffic,
+    max_runtime_per_training_job_in_seconds,
+    total_job_runtime_in_seconds,
+    generate_candidate_definitions_only,
+    sm_layer,
+    kms_key_arn_provided_condition,
+):
+    """
+    autopilot_training_job creates a sagemaker Autopilot training job
+
+    :scope: CDK Construct scope that's needed to create CDK resources
+    :blueprint_bucket: CDK object of the blueprint bucket that contains resources for BYOM pipeline
+    :assets_bucket: the bucket cdk object where pipeline assets are stored
+    :job_name: name of the autopilot job
+    :training_data: location of the training data in assets bucket
+    :target_attribute_name: target's column name in the training data
+    :job_output_location: S3 key in the assets bucket to store the autopilot job's outputs
+    :problem_type: type of Problem (BinaryClassification, MulticlassClassification, or Regression)
+    :job_objective: optimization objective
+    :compression_type: type of compression used with training data
+    :max_candidates: max number of candidates to consider by the autopilot
+    :kms_key_arn: optional kmsKeyArn used to encrypt job's output and instance volume.
+    :encrypt_inter_container_traffic: "True"/"False" to encrypt inter container traffic
+    :max_runtime_per_training_job_in_seconds: max runtime per job in seconds
+    :total_job_runtime_in_seconds: total runetime for the entire Autopilot job in seconds
+    :generate_candidate_definitions_only: "True"/"False" to generate candidate definitions only
+    :sm_layer: sagemaker lambda layer
+    :kms_key_arn_provided_condition: kms provided condition
+    :return: Lambda function
+    """
+    s3_read = s3_policy_read(
+        [
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}",
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}/*",
+        ]
+    )
+
+    s3_write = s3_policy_write(
+        [
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}/{job_output_location}/*",
+        ]
+    )
+
+    # create Autopilot job permissions
+    autopilot_job_permissions = autopilot_job_policy(job_name=job_name)
+    endpoint_policy = autopilot_job_endpoint_policy(job_name=job_name)
+
+    # Kms Key permissions
+    kms_policy = kms_policy_document(scope, "AutopilotKmsPolicy", kms_key_arn)
+    # add conditions to KMS and ECR policies
+    core.Aspects.of(kms_policy).add(ConditionalResources(kms_key_arn_provided_condition))
+
+    sagemaker_logs_policy = sagemaker_logs_metrics_policy_document(scope, "AutopilotLogsMetrics")
+    # create sagemaker role
+    sagemaker_role = create_service_role(
+        scope,
+        "create_autopilot_sagemaker_role",
+        "sagemaker.amazonaws.com",
+        "Role that is create autopilot lambda function assumes to create a autopilot job.",
+    )
+    # attach the conditional policies
+    kms_policy.attach_to_role(sagemaker_role)
+
+    sagemaker_logs_policy.attach_to_role(sagemaker_role)
+    sagemaker_role.add_to_policy(autopilot_job_permissions)
+    sagemaker_role.add_to_policy(endpoint_policy)
+    sagemaker_role.add_to_policy(s3_read)
+    sagemaker_role.add_to_policy(s3_write)
+
+    # create a trust relation to assume the Role
+    sagemaker_role.add_to_policy(iam.PolicyStatement(actions=["sts:AssumeRole"], resources=[sagemaker_role.role_arn]))
+
+    lambda_role = create_service_role(
+        scope,
+        "autopilot_job_lambda_role",
+        lambda_service,
+        "Role that the lambda function assumes to create a sagemaker autopilot training job.",
+    )
+
+    lambda_role.add_to_policy(autopilot_job_permissions)
+    lambda_role.add_to_policy(iam.PolicyStatement(actions=["iam:PassRole"], resources=[sagemaker_role.role_arn]))
+    add_logs_policy(lambda_role)
+
+    autopilot_lambda = lambda_.Function(
+        scope,
+        id,
+        runtime=lambda_.Runtime.PYTHON_3_8,
+        handler=lambda_handler,
+        layers=[sm_layer],
+        role=lambda_role,
+        code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_sagemaker_autopilot_job.zip"),
+        environment={
+            "JOB_NAME": job_name,
+            "ROLE_ARN": sagemaker_role.role_arn,
+            "ASSETS_BUCKET": assets_bucket.bucket_name,
+            "TRAINING_DATA_KEY": training_data,
+            "JOB_OUTPUT_LOCATION": job_output_location,
+            "TARGET_ATTRIBUTE_NAME": target_attribute_name,
+            "KMS_KEY_ARN": kms_key_arn,
+            "PROBLEM_TYPE": problem_type,
+            "JOB_OBJECTIVE": job_objective,
+            "COMPRESSION_TYPE": compression_type,
+            "MAX_CANDIDATES": max_candidates,
+            "ENCRYPT_INTER_CONTAINER_TRAFFIC": encrypt_inter_container_traffic,
+            "MAX_RUNTIME_PER_JOB": max_runtime_per_training_job_in_seconds,
+            "TOTAL_JOB_RUNTIME": total_job_runtime_in_seconds,
+            "GENERATE_CANDIDATE_DEFINITIONS_ONLY": generate_candidate_definitions_only,
+            "LOG_LEVEL": "INFO",
+        },
+        timeout=core.Duration.minutes(10),
+    )
+
+    autopilot_lambda.node.default_child.cfn_options.metadata = suppress_lambda_policies()
+
+    return autopilot_lambda
+
+
+def model_training_job(
+    scope,  # NOSONAR:S107 this function is designed to take many arguments
+    id,
+    blueprint_bucket,
+    assets_bucket,
+    job_name,
+    job_type,
+    training_data,
+    validation_data,
+    s3_data_type,
+    content_type,
+    data_distribution,
+    compression_type,
+    data_input_mode,
+    data_record_wrapping,
+    attribute_names,
+    hyperparameters,
+    job_output_location,
+    image_uri,
+    instance_type,
+    instance_count,
+    instance_volume_size,
+    kms_key_arn,
+    encrypt_inter_container_traffic,
+    max_runtime_per_training_job_in_seconds,
+    use_spot_instances,
+    max_wait_time_for_spot,
+    sm_layer,
+    kms_key_arn_provided_condition,
+    tuner_config=None,
+    hyperparameter_ranges=None,
+):
+    """
+    model_training_job creates a sagemaker Training/HyperparameterTuning training job
+
+    """
+    s3_read = s3_policy_read(
+        [
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}",
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}/*",
+        ]
+    )
+
+    s3_write = s3_policy_write(
+        [
+            f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket.bucket_name}/{job_output_location}/*",
+        ]
+    )
+
+    # create training job permissions
+    training_job_permissions = training_job_policy(job_name=job_name, job_type=job_type)
+
+    # Kms Key permissions
+    kms_policy = kms_policy_document(scope, "TrainingKmsPolicy", kms_key_arn)
+    # add conditions to KMS and ECR policies
+    core.Aspects.of(kms_policy).add(ConditionalResources(kms_key_arn_provided_condition))
+
+    sagemaker_logs_policy = sagemaker_logs_metrics_policy_document(scope, "TrainingLogsMetrics")
+    # create sagemaker role
+    sagemaker_role = create_service_role(
+        scope,
+        "create_training_job_sagemaker_role",
+        "sagemaker.amazonaws.com",
+        "Role that is create model training lambda function assumes to create a Training/HyperparameterTuning job.",
+    )
+    # attach the conditional policies
+    kms_policy.attach_to_role(sagemaker_role)
+
+    sagemaker_logs_policy.attach_to_role(sagemaker_role)
+    sagemaker_role.add_to_policy(training_job_permissions)
+    sagemaker_role.add_to_policy(s3_read)
+    sagemaker_role.add_to_policy(s3_write)
+
+    # create a trust relation to assume the Role
+    sagemaker_role.add_to_policy(iam.PolicyStatement(actions=["sts:AssumeRole"], resources=[sagemaker_role.role_arn]))
+
+    lambda_role = create_service_role(
+        scope,
+        "training_job_lambda_role",
+        lambda_service,
+        "Role that the lambda function assumes to create a sagemaker training job.",
+    )
+
+    lambda_role.add_to_policy(training_job_permissions)
+    lambda_role.add_to_policy(iam.PolicyStatement(actions=["iam:PassRole"], resources=[sagemaker_role.role_arn]))
+    add_logs_policy(lambda_role)
+
+    training_lambda = lambda_.Function(
+        scope,
+        id,
+        runtime=lambda_.Runtime.PYTHON_3_8,
+        handler=lambda_handler,
+        layers=[sm_layer],
+        role=lambda_role,
+        code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_model_training_job.zip"),
+        environment={
+            "JOB_NAME": job_name,
+            "ROLE_ARN": sagemaker_role.role_arn,
+            "ASSETS_BUCKET": assets_bucket.bucket_name,
+            "TRAINING_DATA_KEY": training_data,
+            "VALIDATION_DATA_KEY": validation_data,
+            "JOB_OUTPUT_LOCATION": job_output_location,
+            "S3_DATA_TYPE": s3_data_type,
+            "DATA_INPUT_MODE": data_input_mode,
+            "CONTENT_TYPE": content_type,
+            "DATA_DISTRIBUTION": data_distribution,
+            "ATTRIBUTE_NAMES": attribute_names,
+            "JOB_TYPE": job_type,
+            "KMS_KEY_ARN": kms_key_arn,
+            "IMAGE_URI": image_uri,
+            "INSTANCE_TYPE": instance_type,
+            "INSTANCE_COUNT": instance_count,
+            "COMPRESSION_TYPE": compression_type,
+            "DATA_RECORD_WRAPPING": data_record_wrapping,
+            "INSTANCE_VOLUME_SIZE": instance_volume_size,
+            "ENCRYPT_INTER_CONTAINER_TRAFFIC": encrypt_inter_container_traffic,
+            "JOB_MAX_RUN_SECONDS": max_runtime_per_training_job_in_seconds,
+            "USE_SPOT_INSTANCES": use_spot_instances,
+            "MAX_WAIT_SECONDS": max_wait_time_for_spot,
+            "HYPERPARAMETERS": hyperparameters,
+            "TUNER_CONFIG": tuner_config if tuner_config else core.Aws.NO_VALUE,
+            "HYPERPARAMETER_RANGES": hyperparameter_ranges if hyperparameter_ranges else core.Aws.NO_VALUE,
+            "LOG_LEVEL": "INFO",
+        },
+        timeout=core.Duration.minutes(10),
+    )
+
+    training_lambda.node.default_child.cfn_options.metadata = suppress_lambda_policies()
+
+    return training_lambda
+
+
+def eventbridge_rule_to_sns(
+    scope, logical_id, rule_name, description, source, detail_type, detail, target_sns_topic, sns_message
+):
+    event_rule = events.Rule(
+        scope,
+        logical_id,
+        description=description,
+        enabled=True,
+        event_pattern=events.EventPattern(
+            source=source,
+            detail_type=detail_type,
+            detail=detail,
+        ),
+        targets=[targets.SnsTopic(target_sns_topic, message=sns_message)],
+    )
+
+    return event_rule

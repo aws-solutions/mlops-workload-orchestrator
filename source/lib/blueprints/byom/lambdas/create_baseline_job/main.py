@@ -23,13 +23,14 @@ from sagemaker.clarify import (
 
 from shared.logger import get_logger
 from shared.helper import get_client
-from baselines_helper import SolutionSageMakerBaselines, exception_handler
+from shared.wrappers import exception_handler
+from baselines_helper import SolutionSageMakerBaselines
 
 
 logger = get_logger(__name__)
 s3_client = get_client("s3")
 sm_client = get_client("sagemaker")
-sagemaker_session = sagemaker.session.Session()
+sagemaker_session = sagemaker.session.Session(sagemaker_client=sm_client)
 
 
 @exception_handler

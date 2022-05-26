@@ -129,6 +129,12 @@ echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_
 cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false
 echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false"
 cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false
 
 # Replace %%VERSION%% in other templates
 replace="s/%%VERSION%%/$3/g"
@@ -150,6 +156,12 @@ echo "sed -i -e $replace lib/blueprints/byom/byom_custom_algorithm_image_builder
 sed -i -e $replace lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml
 echo "sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml"
 sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml
+echo "sed -i -e $replace lib/blueprints/byom/autopilot_training_pipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/autopilot_training_pipeline.yaml
+echo "sed -i -e $replace lib/blueprints/byom/model_training_pipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/model_training_pipeline.yaml
+echo "sed -i -e $replace lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml"
+sed -i -e $replace lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml
 
 # Run 'cdk synth' for main templates to generate raw solution outputs
 echo "cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
