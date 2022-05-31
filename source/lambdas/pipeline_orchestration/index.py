@@ -106,6 +106,8 @@ def provision_pipeline(
         pipeline_template_url = (
             template_url("multi_account_codepipeline")
             if is_multi_account == "True"
+            # training pipelines are deployed in the account where the main template is deployed
+            and pipeline_type not in ["model_training_builtin", "model_tuner_builtin", "model_autopilot_training"]
             else template_url("single_account_codepipeline")
         )
 
@@ -113,7 +115,7 @@ def provision_pipeline(
         template_file_name = provisioned_pipeline_template_url.split("/")[-1]
         # get the codepipeline parameters
         codepipeline_params = get_codepipeline_params(
-            is_multi_account, provisioned_pipeline_stack_name, template_zip_name, template_file_name
+            is_multi_account, pipeline_type, provisioned_pipeline_stack_name, template_zip_name, template_file_name
         )
         # format the params (the format is the same for multi-account parameters)
         formatted_codepipeline_params = format_template_parameters(codepipeline_params, "True")

@@ -13,7 +13,6 @@
 from unittest.mock import patch
 from unittest import TestCase
 import pytest
-import json
 import boto3
 from botocore.response import StreamingBody
 from io import BytesIO

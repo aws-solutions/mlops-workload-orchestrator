@@ -21,6 +21,8 @@ from aws_cdk import (
     aws_codecommit as codecommit,
     aws_codebuild as codebuild,
     aws_apigateway as apigw,
+    aws_sns_subscriptions as subscriptions,
+    aws_sns as sns,
     core,
 )
 from aws_solutions_constructs import aws_apigateway_lambda
@@ -29,6 +31,7 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     suppress_s3_access_policy,
     apply_secure_bucket_policy,
     suppress_lambda_policies,
+    suppress_sns,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import (
     ParameteresFactory as pf,
@@ -110,7 +113,7 @@ class MLOpsStack(core.Stack):
         client_existing_bucket = s3.Bucket.from_bucket_arn(
             self,
             "ClientExistingBucket",
-            f"arn:aws:s3:::{existing_bucket.value_as_string.strip()}",
+            f"arn:{core.Aws.PARTITION}:s3:::{existing_bucket.value_as_string.strip()}",
         )
 
         # Create the resource if existing_bucket_provided condition is True
@@ -179,6 +182,27 @@ class MLOpsStack(core.Stack):
         )
         # Apply secure transport bucket policy
         apply_secure_bucket_policy(blueprint_repository_bucket)
+
+        # create sns topic and subscription
+        mlops_notifications_topic = sns.Topic(
+            self,
+            "MLOpsNotificationsTopic",
+        )
+        mlops_notifications_topic.node.default_child.cfn_options.metadata = suppress_sns()
+        mlops_notifications_topic.add_subscription(
+            subscriptions.EmailSubscription(email_address=notification_email.value_as_string)
+        )
+
+        # grant EventBridge permissions to publish messages
+        # (via EventBridge Rules used to monitor SageMaker resources)
+        mlops_notifications_topic.add_to_resource_policy(
+            iam.PolicyStatement(
+                actions=["sns:Publish"],
+                effect=iam.Effect.ALLOW,
+                resources=[mlops_notifications_topic.topic_arn],
+                principals=[iam.ServicePrincipal("events.amazonaws.com")],
+            )
+        )
 
         # solution helper function
         helper_function = create_solution_helper(self)
@@ -290,6 +314,9 @@ class MLOpsStack(core.Stack):
             key="ALLOW_DETAILED_ERROR_MESSAGE", value=allow_detailed_error_message.value_as_string
         )
 
+        provisioner_apigw_lambda.lambda_function.add_environment(
+            key="MLOPS_NOTIFICATIONS_SNS_TOPIC", value=mlops_notifications_topic.topic_arn
+        )
         provisioner_apigw_lambda.lambda_function.add_environment(key="ECR_REPO_NAME", value=ecr_repo_name)
 
         provisioner_apigw_lambda.lambda_function.add_environment(key="ECR_REPO_ARN", value=ecr_repo_arn)
@@ -517,4 +544,11 @@ class MLOpsStack(core.Stack):
                 "[No Model Package Group was created]",
             ).to_string(),
             description="SageMaker model package group arn",
+        )
+
+        core.CfnOutput(
+            self,
+            id="MLOpsNotificationsTopicArn",
+            value=mlops_notifications_topic.topic_arn,
+            description="MLOps notifications SNS topic arn.",
         )

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2022-05-31
+
+### Added
+
+- A new pipeline to train Machine Learning (ML) models using [Amazon SageMaker built-in algorithms](https://docs.aws.amazon.com/sagemaker/latest/dg/algos.html) and [Amazon SageMaker Training Job](https://docs.aws.amazon.com/sagemaker/latest/dg/how-it-works-training.html).
+- A new pipeline to train ML models using Amazon SageMaker built-in algorithms and [Amazon Hyperparameter Tuning Job](https://docs.aws.amazon.com/sagemaker/latest/dg/automatic-model-tuning-how-it-works.html).
+- A new pipeline to train ML models using Amazon SageMaker built-in algorithms and
+  [Amazon SageMaker Autopilot Job](https://docs.aws.amazon.com/sagemaker/latest/dg/autopilot-automate-model-development.html).
+- [Amazon EventBridge Rules](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rules.html)
+  to notify the solution's administrator(s) about the status of the training jobs.
+
+### Updated
+
+- The [Amazon Simple Notification Service (SNS)](https://aws.amazon.com/sns/?whats-new-cards.sort-by=item.additionalFields.postDateTime&whats-new-cards.sort-order=desc)
+  Topic, used for pipelines notifications, was moved to the solution's main template.
+
 ## [1.5.0] - 2022-01-24
 
 ### Added

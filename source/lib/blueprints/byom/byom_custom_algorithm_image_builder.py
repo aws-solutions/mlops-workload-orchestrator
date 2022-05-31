@@ -14,7 +14,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_sns as sns,
-    aws_sns_subscriptions as subscriptions,
     aws_events_targets as targets,
     aws_events as events,
     aws_codepipeline as codepipeline,
@@ -26,7 +25,6 @@ from lib.blueprints.byom.pipeline_definitions.helpers import (
     pipeline_permissions,
     suppress_pipeline_bucket,
     suppress_iam_complex,
-    suppress_sns,
 )
 from lib.blueprints.byom.pipeline_definitions.templates_parameters import ParameteresFactory as pf
 
@@ -36,11 +34,11 @@ class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
         super().__init__(scope, id, **kwargs)
 
         # Parameteres #
-        notification_email = pf.create_notification_email_parameter(self)
         assets_bucket_name = pf.create_assets_bucket_name_parameter(self)
         custom_container = pf.create_custom_container_parameter(self)
         ecr_repo_name = pf.create_ecr_repo_name_parameter(self)
         image_tag = pf.create_image_tag_parameter(self)
+        mlops_sns_topic_arn = pf.create_sns_topic_arn_parameter(self)
 
         # Resources #
         assets_bucket = s3.Bucket.from_bucket_name(self, "ImportedAssetsBucket", assets_bucket_name.value_as_string)
@@ -54,13 +52,9 @@ class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
             self, ecr_repo_name.value_as_string, image_tag.value_as_string, source_output
         )
 
-        pipeline_notification_topic = sns.Topic(
-            self,
-            "PipelineNotification",
-        )
-        pipeline_notification_topic.node.default_child.cfn_options.metadata = suppress_sns()
-        pipeline_notification_topic.add_subscription(
-            subscriptions.EmailSubscription(email_address=notification_email.value_as_string)
+        # import the sns Topic
+        pipeline_notification_topic = sns.Topic.from_topic_arn(
+            self, "ImageBuilderPipelineNotification", mlops_sns_topic_arn.value_as_string
         )
 
         # createing pipeline stages
@@ -97,10 +91,16 @@ class BYOMCustomAlgorithmImageBuilderStack(core.Stack):
             )
         )
 
-        # add cfn nag suppressions
-        pipeline_child_nodes = image_builder_pipeline.node.find_all()
-        pipeline_child_nodes[1].node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
-        pipeline_child_nodes[6].node.default_child.cfn_options.metadata = suppress_iam_complex()
+        # add ArtifactBucket cfn supression (not needing a logging bucket)
+        image_builder_pipeline.node.find_child(
+            "ArtifactsBucket"
+        ).node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
+
+        # add supression for complex policy
+        image_builder_pipeline.node.find_child("Role").node.find_child(
+            "DefaultPolicy"
+        ).node.default_child.cfn_options.metadata = suppress_iam_complex()
+
         # attaching iam permissions to the pipelines
         pipeline_permissions(image_builder_pipeline, assets_bucket)
 

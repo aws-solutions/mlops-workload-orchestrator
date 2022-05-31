@@ -10,9 +10,8 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-from typing import Callable, Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import logging
-import json
 import sagemaker
 from botocore.client import BaseClient
 from sagemaker.model_monitor import DefaultModelMonitor
@@ -27,33 +26,9 @@ from sagemaker.clarify import (
     ModelPredictedLabelConfig,
     SHAPConfig,
 )
+from shared.wrappers import exception_handler
 
 logger = logging.getLogger(__name__)
-
-
-def exception_handler(func: Callable[..., Any]) -> Any:
-    """
-    Docorator function to handle exceptions
-
-    Args:
-        func (object): function to be decorated
-
-    Returns:
-        func's return value
-
-    Raises:
-        Exception thrown by the decorated function
-    """
-
-    def wrapper_function(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-
-        except Exception as e:
-            logger.error(f"Error in {func.__name__}: {str(e)}")
-            raise e
-
-    return wrapper_function
 
 
 class SolutionSageMakerBaselines:

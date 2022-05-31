@@ -73,17 +73,17 @@ def create_sagemaker_role(
         list(
             set(
                 [
-                    f"arn:aws:s3:::{assets_bucket_name}",
-                    f"arn:aws:s3:::{assets_bucket_name}/*",
-                    f"arn:aws:s3:::{input_bucket_name}",
-                    f"arn:aws:s3:::{input_s3_location}",
+                    f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket_name}",
+                    f"arn:{core.Aws.PARTITION}:s3:::{assets_bucket_name}/*",
+                    f"arn:{core.Aws.PARTITION}:s3:::{input_bucket_name}",
+                    f"arn:{core.Aws.PARTITION}:s3:::{input_s3_location}",
                 ]
             )
         )
     )
     s3_write = s3_policy_write(
         [
-            f"arn:aws:s3:::{output_s3_location}/*",
+            f"arn:{core.Aws.PARTITION}:s3:::{output_s3_location}/*",
         ]
     )
     # IAM PassRole permission
