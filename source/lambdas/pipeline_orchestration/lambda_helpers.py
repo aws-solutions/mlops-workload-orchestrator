@@ -447,12 +447,7 @@ def get_model_training_specifc_params(event: Dict[str, Any], job_name: str) -> L
     return [
         ("NotificationsSNSTopicArn", os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]),
         ("JobName", job_name),
-        (
-            "ImageUri",
-            get_image_uri(event.get("pipeline_type"), event, os.environ["REGION"])
-            if os.environ["USE_MODEL_REGISTRY"] == "No"
-            else "",
-        ),
+        ("ImageUri", get_image_uri(event.get("pipeline_type"), event, os.environ["REGION"])),
         ("InstanceType", event.get("instance_type", "ml.m4.xlarge")),
         ("JobInstanceCount", str(event.get("instance_count", "1"))),
         ("InstanceVolumeSize", str(event.get("instance_volume_size", "20"))),

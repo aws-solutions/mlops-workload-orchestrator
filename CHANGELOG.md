@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2022-08-12
+
+### Updated
+
+- The AWS IAM Role permissions with the new naming convention for the temporary Amazon SageMaker endpoints used by the Amazon SageMaker Clarify Model Bias Monitor and Amazon SageMaker Clarify Model Explainability Monitor pipelines.
+
+### Fixed
+
+- Environment variables of lambda functions by adding `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` to handle `protobuf` library breaking changes in versions greater than `3.20.1`.
+
+- Empty string image url for the model training pipelines when using Amazon SageMaker Model Registry option.
+
 ## [2.0.0] - 2022-05-31
 
 ### Added

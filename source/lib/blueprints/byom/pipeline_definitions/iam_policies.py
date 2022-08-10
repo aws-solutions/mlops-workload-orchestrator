@@ -29,7 +29,9 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
         "sagemaker:DescribeModel",  # NOSONAR: permission needs to be repeated for clarity
         "sagemaker:DeleteModel",
     ]
-    resources = [f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*"]
+    resources = [
+        f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*"  # NOSONAR: permission needs to be repeated for clarity
+    ]
 
     if is_realtime_pipeline:
         # extend actions
@@ -95,8 +97,9 @@ def sagemaker_model_bias_explainability_baseline_job_policy():
             "sagemaker:InvokeEndpoint",  # NOSONAR: permission needs to be repeated for clarity
         ],
         resources=[
-            f"{sagemaker_arn_prefix}:endpoint-config/sagemaker-clarify-endpoint-config*",
-            f"{sagemaker_arn_prefix}:endpoint/sagemaker-clarify-endpoint*",
+            f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*",
+            f"{sagemaker_arn_prefix}:endpoint-config/sm-clarify-config*",
+            f"{sagemaker_arn_prefix}:endpoint/sm-clarify-*",
         ],
     )
 
@@ -174,6 +177,7 @@ def create_service_role(scope, id, service, description):
 def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_name, endpoint_name, monitoring_type):
     # common permissions
     actions = [
+        "sagemaker:DescribeModel",
         "sagemaker:DescribeEndpointConfig",
         "sagemaker:DescribeEndpoint",
         "sagemaker:CreateMonitoringSchedule",
@@ -184,6 +188,7 @@ def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_na
     ]
     # common resources
     resources = [
+        f"{sagemaker_arn_prefix}:model/mlopssagemakermodel*",
         f"{sagemaker_arn_prefix}:endpoint-config/mlopssagemakerendpointconfig*",
         f"{sagemaker_arn_prefix}:endpoint/{endpoint_name}",
         f"{sagemaker_arn_prefix}:monitoring-schedule/{monitoring_schedule_name}",

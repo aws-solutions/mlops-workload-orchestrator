@@ -22,6 +22,7 @@ from lib.blueprints.byom.byom_custom_algorithm_image_builder import BYOMCustomAl
 from lib.blueprints.byom.autopilot_training_pipeline import AutopilotJobStack
 from lib.blueprints.byom.model_training_pipeline import TrainingJobStack
 from lib.aws_sdk_config_aspect import AwsSDKConfigAspect
+from lib.protobuf_config_aspect import ProtobufConfigAspect
 from lib.blueprints.byom.pipeline_definitions.cdk_context_value import get_cdk_context_value
 
 app = core.App()
@@ -37,6 +38,10 @@ mlops_stack_single = MLOpsStack(
 # add AWS_SDK_USER_AGENT env variable to Lambda functions
 core.Aspects.of(mlops_stack_single).add(AwsSDKConfigAspect(app, "SDKUserAgentSingle", solution_id, version))
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(mlops_stack_single).add(ProtobufConfigAspect(app, "ProtobufConfigSingle"))
+
+
 mlops_stack_multi = MLOpsStack(
     app,
     "mlops-workload-orchestrator-multi-account",
@@ -45,6 +50,9 @@ mlops_stack_multi = MLOpsStack(
 )
 
 core.Aspects.of(mlops_stack_multi).add(AwsSDKConfigAspect(app, "SDKUserAgentMulti", solution_id, version))
+
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(mlops_stack_multi).add(ProtobufConfigAspect(app, "ProtobufConfigMulti"))
 
 BYOMCustomAlgorithmImageBuilderStack(
     app,
@@ -65,6 +73,9 @@ batch_stack = BYOMBatchStack(
 
 core.Aspects.of(batch_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentBatch", solution_id, version))
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(batch_stack).add(ProtobufConfigAspect(app, "ProtobufConfigBatch"))
+
 data_quality_monitor_stack = ModelMonitorStack(
     app,
     "DataQualityModelMonitorStack",
@@ -75,6 +86,10 @@ data_quality_monitor_stack = ModelMonitorStack(
 core.Aspects.of(data_quality_monitor_stack).add(
     AwsSDKConfigAspect(app, "SDKUserAgentDataMonitor", solution_id, version)
 )
+
+
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(data_quality_monitor_stack).add(ProtobufConfigAspect(app, "ProtobufConfigDataMonitor"))
 
 model_quality_monitor_stack = ModelMonitorStack(
     app,
@@ -87,6 +102,9 @@ core.Aspects.of(model_quality_monitor_stack).add(
     AwsSDKConfigAspect(app, "SDKUserAgentModelQuality", solution_id, version)
 )
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(model_quality_monitor_stack).add(ProtobufConfigAspect(app, "ProtobufConfigModelQuality"))
+
 model_bias_monitor_stack = ModelMonitorStack(
     app,
     "ModelBiasModelMonitorStack",
@@ -96,6 +114,8 @@ model_bias_monitor_stack = ModelMonitorStack(
 
 core.Aspects.of(model_bias_monitor_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentModelBias", solution_id, version))
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(model_bias_monitor_stack).add(ProtobufConfigAspect(app, "ProtobufConfigModelBias"))
 
 model_explainability_monitor_stack = ModelMonitorStack(
     app,
@@ -108,6 +128,8 @@ core.Aspects.of(model_explainability_monitor_stack).add(
     AwsSDKConfigAspect(app, "SDKUserAgentModelExplainability", solution_id, version)
 )
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(model_explainability_monitor_stack).add(ProtobufConfigAspect(app, "ProtobufConfigModelExplainability"))
 
 realtime_stack = BYOMRealtimePipelineStack(
     app,
@@ -117,6 +139,8 @@ realtime_stack = BYOMRealtimePipelineStack(
 
 core.Aspects.of(realtime_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentRealtime", solution_id, version))
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(realtime_stack).add(ProtobufConfigAspect(app, "ProtobufConfigRealtime"))
 
 autopilot_stack = AutopilotJobStack(
     app,
@@ -126,6 +150,8 @@ autopilot_stack = AutopilotJobStack(
 
 core.Aspects.of(autopilot_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentAutopilot", solution_id, version))
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(autopilot_stack).add(ProtobufConfigAspect(app, "ProtobufConfigAutopilot"))
 
 training_stack = TrainingJobStack(
     app,
@@ -136,6 +162,8 @@ training_stack = TrainingJobStack(
 
 core.Aspects.of(training_stack).add(AwsSDKConfigAspect(app, "SDKUserAgentTraining", solution_id, version))
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(training_stack).add(ProtobufConfigAspect(app, "ProtobufConfigTraining"))
 
 hyperparameter_tunning_stack = TrainingJobStack(
     app,
@@ -148,6 +176,8 @@ core.Aspects.of(hyperparameter_tunning_stack).add(
     AwsSDKConfigAspect(app, "SDKUserAgentHyperparamater", solution_id, version)
 )
 
+# add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to handle protobuf breaking changes
+core.Aspects.of(hyperparameter_tunning_stack).add(ProtobufConfigAspect(app, "ProtobufConfigHyperparamater"))
 
 SingleAccountCodePipelineStack(
     app,
