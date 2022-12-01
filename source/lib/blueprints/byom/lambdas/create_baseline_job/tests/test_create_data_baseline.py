@@ -10,7 +10,7 @@
 #  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions     #
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 from unittest import TestCase
 import pytest
 import boto3
@@ -228,22 +228,82 @@ def test_create_model_quality_baseline(mocked_model_monitor_suggest_baseline, mo
     mocked_model_monitor_suggest_baseline.assert_called_with(**expected_baseline_args["suggest_args"])
 
 
+class AnalysisConfigMock:
+    def _to_dict(self):
+        return {
+            "methods": {
+                "shap": {
+                    "baseline": [
+                        [
+                            93,
+                            0,
+                            146,
+                            102,
+                            164,
+                        ]
+                    ],
+                    "num_samples": 100,
+                    "agg_method": "mean_abs",
+                    "use_logit": False,
+                    "save_local_shap_values": True,
+                }
+            },
+            "predictor": {
+                "model_name": "MLOpsSagemakerModel-Ku442sVZS7ER",
+                "instance_type": "ml.m5.large",
+                "initial_instance_count": 1,
+                "accept_type": "text/csv",
+            },
+            "headers": [
+                "Account Length",
+                "VMail Message",
+                "Day Mins",
+                "Day Calls",
+            ],
+        }
+
+
+class BaselineJobConfigMock:
+    analysis_config = AnalysisConfigMock()
+
+
+@patch("baselines_helper.SolutionSageMakerBaselines._upload_analysis_config")
+@patch(
+    "baselines_helper.ModelBiasMonitor.latest_baselining_job_config",
+    create=True,
+    new_callable=PropertyMock,
+    return_value=BaselineJobConfigMock,
+)
 @patch("baselines_helper.ModelBiasMonitor.suggest_baseline")
-def test_create_model_bias_baseline(mocked_model_bias_suggest_baseline, mocked_sagemaker_baselines_instance):
+def test_create_model_bias_baseline(
+    mocked_model_bias_suggest_baseline, mocked_analysis, mocked_upload, mocked_sagemaker_baselines_instance
+):
     sagemaker_baselines = mocked_sagemaker_baselines_instance("ModelBias")
     expected_baseline_args = sagemaker_baselines._get_baseline_job_args()
     sagemaker_baselines._create_model_bias_baseline(expected_baseline_args)
     mocked_model_bias_suggest_baseline.assert_called_with(**expected_baseline_args["suggest_args"])
+    mocked_analysis.assert_called()
 
 
+@patch("baselines_helper.SolutionSageMakerBaselines._upload_analysis_config")
+@patch(
+    "baselines_helper.ModelExplainabilityMonitor.latest_baselining_job_config",
+    create=True,
+    new_callable=PropertyMock,
+    return_value=BaselineJobConfigMock,
+)
 @patch("baselines_helper.ModelExplainabilityMonitor.suggest_baseline")
 def test_create_model_explainability_baseline(
-    mocked_model_explainability_suggest_baseline, mocked_sagemaker_baselines_instance
+    mocked_model_explainability_suggest_baseline,
+    mocked_analysis,
+    mocked_upload,
+    mocked_sagemaker_baselines_instance,
 ):
     sagemaker_baselines = mocked_sagemaker_baselines_instance("ModelExplainability")
     expected_baseline_args = sagemaker_baselines._get_baseline_job_args()
     sagemaker_baselines._create_model_explainability_baseline(expected_baseline_args)
     mocked_model_explainability_suggest_baseline.assert_called_with(**expected_baseline_args["suggest_args"])
+    mocked_analysis.assert_called()
 
 
 def test_get_baseline_dataset_header(mocked_baseline_dataset_header):

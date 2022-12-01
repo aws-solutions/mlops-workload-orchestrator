@@ -100,6 +100,7 @@ class MLOpsStack(core.Stack):
             "accessLogs",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            versioned=True,
         )
 
         # Apply secure transfer bucket policy
@@ -179,6 +180,7 @@ class MLOpsStack(core.Stack):
             server_access_logs_bucket=access_logs_bucket,
             server_access_logs_prefix=blueprints_bucket_name,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            versioned=True,
         )
         # Apply secure transport bucket policy
         apply_secure_bucket_policy(blueprint_repository_bucket)
@@ -329,7 +331,11 @@ class MLOpsStack(core.Stack):
                     {
                         "id": "W76",
                         "reason": "A complex IAM policy is required for this resource.",
-                    }
+                    },
+                    {
+                        "id": "W12",
+                        "reason": "sagemaker:ListModelCards and sagemaker:Search can not have a restricted resource.",
+                    },
                 ]
             }
         }

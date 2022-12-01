@@ -12,6 +12,7 @@
 # #####################################################################################################################
 from typing import Any, Dict, List, Optional, Union
 import logging
+import json
 import sagemaker
 from botocore.client import BaseClient
 from sagemaker.model_monitor import DefaultModelMonitor
@@ -414,6 +415,15 @@ class SolutionSageMakerBaselines:
             **model_bias_baseline_job_args["suggest_args"],
         )
 
+        # get the analysis_config.json for Model Bias monitor
+        analysis_config = model_bias_monitor.latest_baselining_job_config.analysis_config._to_dict()
+        logger.info(f"Model Bias analysis config: {json.dumps(analysis_config)}")
+
+        # upload ModelBias analysis_config.json file to S3
+        self._upload_analysis_config(
+            output_s3_uri=f"{self.output_s3_uri}/monitor/analysis_config.json", analysis_config=analysis_config
+        )
+
         return model_bias_baseline_job
 
     @exception_handler
@@ -442,6 +452,15 @@ class SolutionSageMakerBaselines:
         # create the ModelExplainability baseline job
         model_explainability_baseline_job = model_explainability_monitor.suggest_baseline(
             **model_explainability_baseline_job_args["suggest_args"],
+        )
+
+        # get the analysis_config.json for Explainability monitor
+        analysis_config = model_explainability_monitor.latest_baselining_job_config.analysis_config._to_dict()
+        logger.info(f"model_explainability analysis config: {json.dumps(analysis_config)}")
+
+        # upload Explainability analysis_config.json file to S3
+        self._upload_analysis_config(
+            output_s3_uri=f"{self.output_s3_uri}/monitor/analysis_config.json", analysis_config=analysis_config
         )
 
         return model_explainability_baseline_job
@@ -494,3 +513,12 @@ class SolutionSageMakerBaselines:
         header = dataset.split("\n")[0].split(",")
 
         return header
+
+    @exception_handler
+    def _upload_analysis_config(self, output_s3_uri: str, analysis_config: Dict[str, Any]):
+        logger.info(f"uploading analysis_confg.json to {output_s3_uri}")
+        analysis_config_uri = sagemaker.s3.S3Uploader.upload_string_as_file_body(
+            json.dumps(analysis_config), desired_s3_uri=output_s3_uri, sagemaker_session=self.sagemaker_session
+        )
+
+        logger.info(f"analysis_confg.json uri is: {analysis_config_uri}")

@@ -13,6 +13,8 @@
 import boto3
 import json
 import os
+import datetime
+from json import JSONEncoder
 from botocore.config import Config
 from shared.logger import get_logger
 
@@ -38,3 +40,11 @@ def get_client(service_name, config=CLIENT_CONFIG):
 def reset_client():
     global _helpers_service_clients
     _helpers_service_clients = dict()
+
+
+# subclass JSONEncoder to be able to convert pipeline status to json
+class DateTimeEncoder(JSONEncoder):
+    # Override the default method
+    def default(self, obj):
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return obj.isoformat()

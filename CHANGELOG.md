@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2022-11-30
+
+### Added
+
+- Integration with Amazon SageMaker Model Card and Model Dashboard features to allow customers to perform model card operations. All Amazon SageMaker resources (models, endpoints, training jobs, and model monitors) created by the solution will show up on the SageMaker Model Dashboard.
+
+### Fixed
+
+- Missing AWS IAM Role permissions used by the Amazon SageMaker Clarify Model Bias Monitor and Amazon SageMaker Clarify Model Explainability Monitor scheduling jobs.
+
 ## [2.0.1] - 2022-08-12
 
 ### Updated

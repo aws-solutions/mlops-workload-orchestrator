@@ -299,7 +299,8 @@ class SageMakerModelMonitor(core.Construct):
             self.scope,
             id,
             model_bias_app_specification=sagemaker.CfnModelBiasJobDefinition.ModelBiasAppSpecificationProperty(
-                config_uri=f"{self.baseline_job_output_location}/analysis_config.json", image_uri=self.image_uri
+                config_uri=f"{self.baseline_job_output_location}/monitor/analysis_config.json",
+                image_uri=self.image_uri,
             ),
             model_bias_baseline_config=sagemaker.CfnModelBiasJobDefinition.ModelBiasBaselineConfigProperty(
                 constraints_resource=sagemaker.CfnModelBiasJobDefinition.ConstraintsResourceProperty(
@@ -366,7 +367,7 @@ class SageMakerModelMonitor(core.Construct):
             self.scope,
             id,
             model_explainability_app_specification=sagemaker.CfnModelExplainabilityJobDefinition.ModelExplainabilityAppSpecificationProperty(
-                config_uri=f"{self.baseline_job_output_location}/analysis_config.json", image_uri=self.image_uri
+                config_uri=f"{self.baseline_job_output_location}/monitor/analysis_config.json", image_uri=self.image_uri
             ),
             model_explainability_baseline_config=sagemaker.CfnModelExplainabilityJobDefinition.ModelExplainabilityBaselineConfigProperty(
                 constraints_resource=sagemaker.CfnModelExplainabilityJobDefinition.ConstraintsResourceProperty(
