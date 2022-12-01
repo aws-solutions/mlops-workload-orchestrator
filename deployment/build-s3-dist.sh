@@ -69,8 +69,12 @@ echo "cd $source_dir"
 cd $source_dir
 
 # setup lambda layers (building sagemaker layer using lambda build environment for python 3.8)
-echo 'docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install --upgrade -r requirements.txt -t ./python; exit"'
-docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install --upgrade -r requirements.txt -t ./python; exit"
+echo 'docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"'
+docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"
+
+# Remove tests and cache stuff (to reduce size)
+find "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer/python -type d -name "tests" -exec rm -rfv {} +
+find "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer/python -type d -name "__pycache__" -exec rm -rfv {} +
 
 echo "python3 -m venv .venv-prod"
 python3 -m venv .venv-prod

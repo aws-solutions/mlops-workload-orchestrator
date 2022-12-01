@@ -42,6 +42,7 @@ from lib.blueprints.byom.pipeline_definitions.iam_policies import (
     autopilot_job_policy,
     autopilot_job_endpoint_policy,
     training_job_policy,
+    sagemaker_tags_policy_statement,
 )
 
 
@@ -244,6 +245,9 @@ def create_baseline_job_lambda(
     # add conditions to KMS and ECR policies
     core.Aspects.of(kms_policy).add(ConditionalResources(kms_key_arn_provided_condition))
 
+    # sagemaker tags permissions
+    sagemaker_tags_policy = sagemaker_tags_policy_statement()
+
     # create sagemaker role
     sagemaker_role = create_service_role(
         scope,
@@ -270,6 +274,7 @@ def create_baseline_job_lambda(
 
     sagemaker_logs_policy.attach_to_role(sagemaker_role)
     sagemaker_role.add_to_policy(create_baseline_job_policy)
+    sagemaker_role.add_to_policy(sagemaker_tags_policy)
     # add extra permissions for "ModelBias", "ModelExplainability" baselines
     if monitoring_type in ["ModelBias", "ModelExplainability"]:
         lambda_role.add_to_policy(baseline_lambda_get_model_name_policy(endpoint_name))
@@ -285,6 +290,7 @@ def create_baseline_job_lambda(
         )
     )
     lambda_role.add_to_policy(create_baseline_job_policy)
+    lambda_role.add_to_policy(sagemaker_tags_policy)
     lambda_role.add_to_policy(s3_write)
     lambda_role.add_to_policy(s3_read)
     add_logs_policy(lambda_role)
@@ -355,7 +361,6 @@ def create_stackset_action(
     account_ids,
     org_ids,
     regions,
-    assets_bucket,
     stack_name,
     delegated_admin_condition,
 ):
@@ -372,7 +377,6 @@ def create_stackset_action(
     :account_ids: list of AWS accounts where the stack with be deployed
     :org_ids: list of AWS organizational ids where the stack with be deployed
     :regions: list of regions where the stack with be deployed
-    :assets_bucket: the bucket cdk object where pipeline assets are stored
     :stack_name: name of the stack to be deployed
     :delegated_admin_condition: CDK condition to indicate if a delegated admin account is used
     :return: codepipeline invokeLambda action in a form of a CDK object that can be attached to a codepipeline stage
@@ -446,12 +450,11 @@ def create_stackset_action(
 
 
 def create_cloudformation_action(
-    scope, action_name, stack_name, source_output, template_file, template_parameters_file, run_order=1
+    action_name, stack_name, source_output, template_file, template_parameters_file, run_order=1
 ):
     """
     create_cloudformation_action a CloudFormation action to be added to AWS Codepipeline stage
 
-    :scope: CDK Construct scope that's needed to create CDK resources
     :action_name: name of the StackSet action
     :stack_name: name of the stack to be deployed
     :source_output: CDK object of the Source action's output
@@ -902,9 +905,7 @@ def model_training_job(
     return training_lambda
 
 
-def eventbridge_rule_to_sns(
-    scope, logical_id, rule_name, description, source, detail_type, detail, target_sns_topic, sns_message
-):
+def eventbridge_rule_to_sns(scope, logical_id, description, source, detail_type, detail, target_sns_topic, sns_message):
     event_rule = events.Rule(
         scope,
         logical_id,

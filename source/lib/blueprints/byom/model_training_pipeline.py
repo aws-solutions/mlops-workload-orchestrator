@@ -236,7 +236,6 @@ class TrainingJobStack(core.Stack):
         eventbridge_rule_to_sns(
             scope=self,
             logical_id="JobNotificationRule",
-            rule_name="job_notification_rule",
             description="EventBridge rule to notify the admin on the status change of the job",
             source=["aws.sagemaker"],
             detail_type=values_map[self.training_type]["detail_type"],

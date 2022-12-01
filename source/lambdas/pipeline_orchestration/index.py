@@ -11,14 +11,13 @@
 #  and limitations under the License.                                                                                 #
 # #####################################################################################################################
 import json
-from json import JSONEncoder
 import os
-import datetime
 from botocore.client import BaseClient
+from sagemaker.session import Session
 from typing import Dict, Any, List, Union
 from shared.wrappers import BadRequest, api_exception_handler
 from shared.logger import get_logger
-from shared.helper import get_client
+from shared.helper import get_client, DateTimeEncoder
 from lambda_helpers import (
     validate,
     template_url,
@@ -28,31 +27,40 @@ from lambda_helpers import (
     format_template_parameters,
     create_template_zip_file,
 )
+from solution_model_card import SolutionModelCardAPIs
 
 cloudformation_client = get_client("cloudformation")
 codepipeline_client = get_client("codepipeline")
 s3_client = get_client("s3")
 
+sm_client = get_client("sagemaker")
+sagemaker_session = Session(sagemaker_client=sm_client)
+
 logger = get_logger(__name__)
 
 content_type = "plain/text"
 
-
-# subclass JSONEncoder to be able to convert pipeline status to json
-class DateTimeEncoder(JSONEncoder):
-    # Override the default method
-    def default(self, obj):
-        if isinstance(obj, (datetime.date, datetime.datetime)):
-            return obj.isoformat()
+model_card_operations = [
+    "create_model_card",
+    "update_model_card",
+    "describe_model_card",
+    "delete_model_card",
+    "export_model_card",
+    "list_model_cards",
+]
 
 
 @api_exception_handler
 def handler(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+
     if "httpMethod" in event and event["httpMethod"] == "POST":  # Lambda is being invoked from API Gateway
-        if event["path"] == "/provisionpipeline":
-            return provision_pipeline(json.loads(event["body"]))
+        event_body = json.loads(event["body"])
+        if event["path"] == "/provisionpipeline" and event_body.get("pipeline_type") in model_card_operations:
+            return provision_model_card(event_body, sagemaker_session)
+        elif event["path"] == "/provisionpipeline":
+            return provision_pipeline(event_body)
         elif event["path"] == "/pipelinestatus":
-            return pipeline_status(json.loads(event["body"]))
+            return pipeline_status(event_body)
         else:
             raise BadRequest("Unacceptable event path. Path must be /provisionpipeline or /pipelinestatus")
     elif "pipeline_type" in event:  # Lambda is being invoked from codepipeline/codebuild
@@ -64,6 +72,28 @@ def handler(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         )
 
 
+def provision_model_card(event: Dict[str, Any], sagemaker_session: Session) -> Dict[str, Any]:
+    pipeline_type = event.get("pipeline_type")
+    if pipeline_type == "create_model_card":
+        return SolutionModelCardAPIs(event, sagemaker_session).create()
+    elif pipeline_type == "update_model_card":
+        return SolutionModelCardAPIs(event, sagemaker_session).update()
+    elif pipeline_type == "describe_model_card":
+        return SolutionModelCardAPIs(event, sagemaker_session).describe()
+    elif pipeline_type == "delete_model_card":
+        return SolutionModelCardAPIs(event, sagemaker_session).delete()
+    elif pipeline_type == "export_model_card":
+        return SolutionModelCardAPIs(event, sagemaker_session).export_to_pdf(
+            s3_output_path=f"s3://{os.environ['ASSETS_BUCKET']}/model_card_exports"
+        )
+    elif pipeline_type == "list_model_cards":
+        return SolutionModelCardAPIs(event, sagemaker_session).list_model_cards()
+    else:
+        raise BadRequest(
+            "pipeline_type must be on of create_model_card|update_model_card|describe_model_card|delete_model_card|export_model_card"
+        )
+
+
 def provision_pipeline(
     event: Dict[str, Any],
     client: BaseClient = cloudformation_client,
@@ -72,7 +102,7 @@ def provision_pipeline(
     """
     provision_pipeline takes the lambda event object and creates a cloudformation stack
 
-    :event: event object from lambda function. It must containe: pipeline_type, custom_model_container,
+    :event: event object from lambda function. It must contain: pipeline_type, custom_model_container,
     model_framework, model_framework_version, model_name, model_artifact_location, training_data,
     inference_instance, inference_type, batch_inference_data
     :client: boto3 cloudformation client. Not needed, it is only added for unit testing purpose
@@ -135,7 +165,7 @@ def provision_pipeline(
             s3_client,
         )
 
-    logger.info("New pipelin stack created")
+    logger.info("New pipeline stack created")
     logger.info(stack_response)
     response = {
         "statusCode": 200,

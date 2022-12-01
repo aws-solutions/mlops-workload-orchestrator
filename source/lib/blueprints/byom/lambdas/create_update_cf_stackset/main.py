@@ -32,7 +32,7 @@ cf_client = get_client("cloudformation")
 cp_client = get_client("codepipeline")
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, _):
     """The Lambda function handler
 
     If a continuing job then checks the CloudFormation stackset and its instances status
