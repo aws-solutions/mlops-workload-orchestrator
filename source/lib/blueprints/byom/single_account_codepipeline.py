@@ -56,7 +56,6 @@ class SingleAccountCodePipelineStack(core.Stack):
 
         # create cloudformation action
         cloudformation_action = create_cloudformation_action(
-            self,
             "deploy_stack",
             stack_name.value_as_string,
             source_output,

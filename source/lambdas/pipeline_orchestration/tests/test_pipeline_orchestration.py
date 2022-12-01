@@ -50,6 +50,7 @@ from pipeline_orchestration.index import (
     update_stack,
     pipeline_status,
     DateTimeEncoder,
+    provision_model_card,
 )
 from shared.wrappers import BadRequest
 from tests.fixtures.orchestrator_fixtures import (
@@ -98,6 +99,15 @@ content_type = "plain/text"
 
 
 def test_handler():
+    # event["path"] == "/provisionpipeline" and pipeline_type is model_crad operation
+    with patch("pipeline_orchestration.index.provision_model_card") as mock_provision_card:
+        event = {
+            "httpMethod": "POST",
+            "path": "/provisionpipeline",
+            "body": json.dumps({"pipeline_type": "create_model_card", "test": "test"}),
+        }
+        handler(event, {})
+        assert mock_provision_card.called is True
     # event["path"] == "/provisionpipeline"
     with patch("pipeline_orchestration.index.provision_pipeline") as mock_provision_pipeline:
         event = {
@@ -516,6 +526,56 @@ def test_get_stack_name(
     assert (
         get_stack_name(api_image_builder_event)
         == f"mlops-pipeline-{api_image_builder_event['image_tag']}-byompipelineimagebuilder"
+    )
+
+
+@patch("sagemaker.Session")
+@patch("solution_model_card.SolutionModelCardAPIs.list_model_cards")
+@patch("solution_model_card.SolutionModelCardAPIs.export_to_pdf")
+@patch("solution_model_card.SolutionModelCardAPIs.delete")
+@patch("solution_model_card.SolutionModelCardAPIs.describe")
+@patch("solution_model_card.SolutionModelCardAPIs.update")
+@patch("solution_model_card.SolutionModelCardAPIs.create")
+def test_provision_model_card(
+    patched_create, patched_update, patched_describe, patched_delete, patched_export, patched_list, patched_session
+):
+    # assert the create APIs is called when pipeline_type=create_model_card
+    event = dict(pipeline_type="create_model_card")
+    provision_model_card(event, patched_session)
+    assert patched_create.called is True
+
+    # assert the create APIs is called when pipeline_type=update_model_card
+    event["pipeline_type"] = "update_model_card"
+    provision_model_card(event, patched_session)
+    assert patched_update.called is True
+
+    # assert the create APIs is called when pipeline_type=delete_model_card
+    event["pipeline_type"] = "delete_model_card"
+    provision_model_card(event, patched_session)
+    assert patched_delete.called is True
+
+    # assert the create APIs is called when pipeline_type=describe_model_card
+    event["pipeline_type"] = "describe_model_card"
+    provision_model_card(event, patched_session)
+    assert patched_describe.called is True
+
+    # assert the create APIs is called when pipeline_type=export_model_card
+    event["pipeline_type"] = "export_model_card"
+    provision_model_card(event, patched_session)
+    assert patched_export.called is True
+
+    # assert the create APIs is called when pipeline_type=list_model_cardd
+    event["pipeline_type"] = "list_model_cards"
+    provision_model_card(event, patched_session)
+    assert patched_list.called is True
+
+    # assert for error if the pipeline_type is incorrect
+    event["pipeline_type"] = "wrong_pipeline_type"
+    with pytest.raises(BadRequest) as error_info:
+        provision_model_card(event, patched_session)
+    assert (
+        str(error_info.value)
+        == "pipeline_type must be on of create_model_card|update_model_card|describe_model_card|delete_model_card|export_model_card"
     )
 
 

@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 sm_client = get_client("sagemaker")
 
 
-def handler(event, context):
+def handler(*_):
     try:
         model_name = os.environ.get("model_name").lower()
         batch_inference_data = os.environ.get("batch_inference_data")

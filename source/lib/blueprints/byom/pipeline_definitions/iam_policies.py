@@ -37,12 +37,12 @@ def sagemaker_policy_statement(is_realtime_pipeline, endpoint_name, endpoint_nam
         # extend actions
         actions.extend(
             [
-                "sagemaker:CreateEndpointConfig",
+                "sagemaker:CreateEndpointConfig",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DescribeEndpointConfig",  # NOSONAR: permission needs to be repeated for clarity
-                "sagemaker:DeleteEndpointConfig",
+                "sagemaker:DeleteEndpointConfig",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:CreateEndpoint",  # NOSONAR: permission needs to be repeated for clarity
                 "sagemaker:DescribeEndpoint",  # NOSONAR: permission needs to be repeated for clarity
-                "sagemaker:DeleteEndpoint",
+                "sagemaker:DeleteEndpoint",  # NOSONAR: permission needs to be repeated for clarity
             ]
         )
 
@@ -180,11 +180,16 @@ def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_na
         "sagemaker:DescribeModel",
         "sagemaker:DescribeEndpointConfig",
         "sagemaker:DescribeEndpoint",
+        "sagemaker:CreateEndpointConfig",
+        "sagemaker:CreateEndpoint",
         "sagemaker:CreateMonitoringSchedule",
         "sagemaker:DescribeMonitoringSchedule",
         "sagemaker:StopMonitoringSchedule",
         "sagemaker:DeleteMonitoringSchedule",
         "sagemaker:DescribeProcessingJob",
+        "sagemaker:DeleteEndpointConfig",
+        "sagemaker:DeleteEndpoint",
+        "sagemaker:InvokeEndpoint",
     ]
     # common resources
     resources = [
@@ -193,6 +198,8 @@ def sagemaker_monitor_policy_statement(baseline_job_name, monitoring_schedule_na
         f"{sagemaker_arn_prefix}:endpoint/{endpoint_name}",
         f"{sagemaker_arn_prefix}:monitoring-schedule/{monitoring_schedule_name}",
         f"{sagemaker_arn_prefix}:processing-job/{baseline_job_name}",
+        f"{sagemaker_arn_prefix}:endpoint-config/sm-clarify-config*",
+        f"{sagemaker_arn_prefix}:endpoint/sm-clarify-*",
     ]
 
     # create a map of monitoring type -> required permissions/resources
@@ -481,11 +488,13 @@ def cloudformation_stackset_instances_policy(stack_name, account_id):
             "cloudformation:CreateStackInstances",
             "cloudformation:DeleteStackInstances",
             "cloudformation:UpdateStackSet",
+            "lambda:TagResource",
         ],
         resources=[
             f"arn:{core.Aws.PARTITION}:cloudformation::{account_id}:stackset-target/{stack_name}:*",
             f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}::type/resource/*",
             f"arn:{core.Aws.PARTITION}:cloudformation:{core.Aws.REGION}:{account_id}:stackset/{stack_name}:*",
+            f"arn:{core.Aws.PARTITION}:lambda:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:function:*",
         ],
     )
 
@@ -515,7 +524,7 @@ def create_orchestrator_policy(
     blueprint_repository_bucket,
     assets_s3_bucket_name,
 ):
-    return iam.Policy(
+    orchestrator_policy = iam.Policy(
         scope,
         "lambdaOrchestratorPolicy",
         statements=[
@@ -707,8 +716,39 @@ def create_orchestrator_policy(
                     f"arn:{core.Aws.PARTITION}:events:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:event-bus/*",
                 ],
             ),
+            # SageMaker Model Card permissions
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    # to perform model card operations
+                    "sagemaker:CreateModelCard",
+                    "sagemaker:DescribeModelCard",
+                    "sagemaker:UpdateModelCard",
+                    "sagemaker:DeleteModelCard",
+                    "sagemaker:CreateModelCardExportJob",
+                    "sagemaker:DescribeModelCardExportJob",
+                    "sagemaker:DescribeModel",
+                    # to extract training details information
+                    "sagemaker:DescribeTrainingJob",
+                ],
+                resources=[
+                    f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:model-card/*",
+                    f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:model/*",
+                    f"arn:{core.Aws.PARTITION}:sagemaker:{core.Aws.REGION}:{core.Aws.ACCOUNT_ID}:training-job/*",
+                ],
+            ),
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["sagemaker:ListModelCards", "sagemaker:Search"],
+                # ListModelCards/sagemaker:Search do not have a scoped-down resource
+                resources=[
+                    "*",
+                ],
+            ),
         ],
     )
+
+    return orchestrator_policy
 
 
 def create_invoke_lambda_policy(lambda_functions_list):

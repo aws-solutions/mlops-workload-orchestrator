@@ -172,7 +172,6 @@ class AutopilotJobStack(core.Stack):
         eventbridge_rule_to_sns(
             scope=self,
             logical_id="AutopilotJobTunerRule",
-            rule_name="autopilot_job_notification_rule",
             description="EventBridge rule to notify the admin on the status change of the hyperparameter job used by the autopilot job",
             source=event_source,
             detail_type=["SageMaker HyperParameter Tuning Job State Change"],
@@ -196,7 +195,6 @@ class AutopilotJobStack(core.Stack):
         eventbridge_rule_to_sns(
             scope=self,
             logical_id="AutopilotJobProcessingRule",
-            rule_name="autopilot_job_processing_rule",
             description="EventBridge rule to notify the admin on the status change of the last two processing jobs used the autopilot job",
             source=event_source,
             detail_type=["SageMaker Processing Job State Change"],
@@ -223,7 +221,6 @@ class AutopilotJobStack(core.Stack):
         eventbridge_rule_to_sns(
             scope=self,
             logical_id="AutopilotJobInterProcessingRule",
-            rule_name="autopilot_job_inter_processing_rule",
             description="EventBridge rule to notify the admin on the status change of the intermidate processing jobs used the autopilot job",
             source=event_source,
             detail_type=["SageMaker Processing Job State Change"],
@@ -250,7 +247,6 @@ class AutopilotJobStack(core.Stack):
         eventbridge_rule_to_sns(
             scope=self,
             logical_id="AutopilotJobTrainingRule",
-            rule_name="autopilot_job_training_rule",
             description="EventBridge rule to notify the admin on the status change of the intermidate training jobs used the autopilot job",
             source=event_source,
             detail_type=["SageMaker Training Job State Change"],
@@ -276,7 +272,6 @@ class AutopilotJobStack(core.Stack):
         eventbridge_rule_to_sns(
             scope=self,
             logical_id="AutopilotJobTransformRule",
-            rule_name="autopilot_job_transform_rule",
             description="EventBridge rule to notify the admin on the status change of the intermidate transform jobs used the autopilot job",
             source=event_source,
             detail_type=["SageMaker Transform Job State Change"],

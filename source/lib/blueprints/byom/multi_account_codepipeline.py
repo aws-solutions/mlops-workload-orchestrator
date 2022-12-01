@@ -103,7 +103,6 @@ class MultiAccountCodePipelineStack(core.Stack):
             [dev_account_id.value_as_string],
             [dev_org_id.value_as_string],
             [core.Aws.REGION],
-            assets_bucket,
             f"{stack_name.value_as_string}-dev-{unique_id}",
             delegated_admin_account_condition,
         )
@@ -127,7 +126,6 @@ class MultiAccountCodePipelineStack(core.Stack):
             [staging_account_id.value_as_string],
             [staging_org_id.value_as_string],
             [core.Aws.REGION],
-            assets_bucket,
             f"{stack_name.value_as_string}-staging-{unique_id}",
             delegated_admin_account_condition,
         )
@@ -151,7 +149,6 @@ class MultiAccountCodePipelineStack(core.Stack):
             [prod_account_id.value_as_string],
             [prod_org_id.value_as_string],
             [core.Aws.REGION],
-            assets_bucket,
             f"{stack_name.value_as_string}-prod-{unique_id}",
             delegated_admin_account_condition,
         )
