@@ -2,6 +2,7 @@
 omit =
   tests/*
   setup.py
+  charset_normalizer/**
   */.venv-test/*
   cdk.out/*
   conftest.py
