@@ -21,7 +21,7 @@ def stackset_name():
 
 @pytest.fixture()
 def mocked_org_ids():
-    return ["Test-Org-Id"]
+    return ["ou-x9x7-xxx1xxx3"]
 
 
 @pytest.fixture()
