@@ -29,8 +29,10 @@ def handler(event, context):
 
 
 def invoke(event_body, endpoint_name, sm_client=sagemaker_client):
+    # convert the payload to a string if it not a string (to support JSON input)
+    payload = event_body["payload"] if isinstance(event_body["payload"], str) else json.dumps(event_body["payload"])
     response = sm_client.invoke_endpoint(
-        EndpointName=endpoint_name, Body=event_body["payload"], ContentType=event_body["content_type"]
+        EndpointName=endpoint_name, Body=payload, ContentType=event_body["content_type"]
     )
     logger.info(response)
     predictions = response["Body"].read().decode()

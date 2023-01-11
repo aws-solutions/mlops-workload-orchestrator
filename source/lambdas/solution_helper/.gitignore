@@ -6,6 +6,7 @@ chardet/
 crhelper/
 idna/
 requests/
+charset_normalizer/
 # crhelper tests directory
 tests/
 urllib3/

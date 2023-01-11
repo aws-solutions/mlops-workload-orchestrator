@@ -81,7 +81,7 @@ Upon successfully cloning the repository into your local development environment
 
 ### Prerequisites
 
-- Python 3.8
+- Python 3.10
 - [AWS Command Line Interface](https://aws.amazon.com/cli/)
 - Docker (required to build the AWS Lambda layer for Amazon SageMaker SDK)
 
