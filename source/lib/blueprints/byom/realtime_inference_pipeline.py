@@ -68,9 +68,10 @@ class BYOMRealtimePipelineStack(core.Stack):
             self,
             "BYOMInference",
             lambda_function_props={
-                "runtime": lambda_.Runtime.PYTHON_3_8,
+                "runtime": lambda_.Runtime.PYTHON_3_9,
                 "handler": "main.handler",
                 "code": lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/inference.zip"),
+                "timeout": core.Duration.minutes(5)
             },
             api_gateway_props={
                 "defaultMethodOptions": {

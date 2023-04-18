@@ -35,7 +35,12 @@ def mocked_common_env_vars():
         "CONTENT_TYPE": "csv",
         "USE_SPOT_INSTANCES": "True",
         "HYPERPARAMETERS": json.dumps(
-            dict(eval_metric="auc", objective="binary:logistic", num_round=400, rate_drop=0.3)
+            dict(
+                eval_metric="auc",
+                objective="binary:logistic",
+                num_round=400,
+                rate_drop=0.3,
+            )
         ),
         "TAGS": json.dumps([{"pipeline": "training"}]),
     }
@@ -87,7 +92,24 @@ def mocked_hyperparameters(mocked_training_job_env_vars):
 
 
 @pytest.fixture()
-def mocked_estimator_config(mocked_training_job_env_vars):
+def mocked_sagemaker_session():
+    region = "us-east-1"
+    boto_mock = Mock(name="boto_session", region_name=region)
+    sms = Mock(
+        name="sagemaker_session",
+        boto_session=boto_mock,
+        boto_region_name=region,
+        config=None,
+        local_mode=False,
+        s3_resource=None,
+        s3_client=None,
+    )
+    sms.sagemaker_config = {}
+    return sms
+
+
+@pytest.fixture()
+def mocked_estimator_config(mocked_training_job_env_vars, mocked_sagemaker_session):
     return dict(
         image_uri=os.environ["IMAGE_URI"],
         role=os.environ["ROLE_ARN"],
@@ -95,17 +117,19 @@ def mocked_estimator_config(mocked_training_job_env_vars):
         instance_type=os.environ["INSTANCE_TYPE"],
         volume_size=int(os.environ["INSTANCE_VOLUME_SIZE"]),
         output_path=f"s3://{os.environ['ASSETS_BUCKET']}/{os.environ['JOB_OUTPUT_LOCATION']}",
-        sagemaker_session=Mock(),
+        sagemaker_session=mocked_sagemaker_session,
     )
 
 
 @pytest.fixture()
 def mocked_data_channels(mocked_training_job_env_vars):
     train_input = TrainingInput(
-        f"s3://{os.environ['ASSETS_BUCKET']}/{os.environ['TRAINING_DATA_KEY']}", content_type=os.environ["CONTENT_TYPE"]
+        f"s3://{os.environ['ASSETS_BUCKET']}/{os.environ['TRAINING_DATA_KEY']}",
+        content_type=os.environ["CONTENT_TYPE"],
     )
     validation_input = TrainingInput(
-        f"s3://{os.environ['ASSETS_BUCKET']}/{os.environ['TRAINING_DATA_KEY']}", content_type=os.environ["CONTENT_TYPE"]
+        f"s3://{os.environ['ASSETS_BUCKET']}/{os.environ['TRAINING_DATA_KEY']}",
+        content_type=os.environ["CONTENT_TYPE"],
     )
 
     data_channels = {"train": train_input, "validation": validation_input}

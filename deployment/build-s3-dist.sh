@@ -69,8 +69,8 @@ echo "cd $source_dir"
 cd $source_dir
 
 # setup lambda layers (building sagemaker layer using lambda build environment for python 3.8)
-echo 'docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"'
-docker run -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task lambci/lambda:build-python3.8 /bin/bash -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"
+echo 'docker run --entrypoint /bin/bash -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task public.ecr.aws/lambda/python:3.9 -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"'
+docker run --entrypoint /bin/bash -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task public.ecr.aws/lambda/python:3.9 -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"
 
 # Remove tests and cache stuff (to reduce size)
 find "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer/python -type d -name "tests" -exec rm -rfv {} +
@@ -115,30 +115,30 @@ echo "npm install -g aws-cdk@$cdk_version"
 npm install -g aws-cdk@$cdk_version
 
 #Run 'cdk synth for BYOM blueprints
-echo "cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false"
-cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false
-echo "cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false"
-cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false
-echo "cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false"
-cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false
-echo "cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false"
-cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false
-echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false"
-cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false
-echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false"
-cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false
-echo "cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false"
-cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false
-echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false"
-cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false
-echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false"
-cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false
-echo "cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false"
-cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false
-echo "cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false"
-cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false
-echo "cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false"
-cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
+cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
 
 # Replace %%VERSION%% in other templates
 replace="s/%%VERSION%%/$3/g"
@@ -168,10 +168,10 @@ echo "sed -i -e $replace lib/blueprints/byom/model_hyperparameter_tunning_pipeli
 sed -i -e $replace lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml
 
 # Run 'cdk synth' for main templates to generate raw solution outputs
-echo "cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
-cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir
-echo "cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
-cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --output=$staging_dist_dir
+echo "cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir"
+cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir
+echo "cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir"
+cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir
 
 # Remove unnecessary output files
 echo "cd $staging_dist_dir"
