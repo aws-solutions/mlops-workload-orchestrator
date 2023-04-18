@@ -19,6 +19,9 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 helper = CfnResource(json_logging=True, log_level="INFO")
 
+# requests.post timeout in seconds
+REQUST_TIMEOUT = 60
+
 
 def _sanitize_data(resource_properties):
     # Define allowed keys. You need to update this list with new metrics
@@ -42,7 +45,11 @@ def _sanitize_data(resource_properties):
     resource_properties.pop("UUID", None)
 
     # send only allowed metrics
-    sanitized_data = {key: resource_properties[key] for key in allowed_keys if key in resource_properties}
+    sanitized_data = {
+        key: resource_properties[key]
+        for key in allowed_keys
+        if key in resource_properties
+    }
 
     return sanitized_data
 
@@ -63,9 +70,16 @@ def _send_anonymous_metrics(request_type, resource_properties):
         }
 
         logger.info(f"Sending payload: {payload}")
-        response = requests.post("https://metrics.awssolutionsbuilder.com/generic", json=payload, headers=headers)
+        response = requests.post(
+            "https://metrics.awssolutionsbuilder.com/generic",
+            json=payload,
+            headers=headers,
+            timeout=REQUST_TIMEOUT,
+        )
         # log the response
-        logger.info(f"Response from the metrics endpoint: {response.status_code} {response.reason}")
+        logger.info(
+            f"Response from the metrics endpoint: {response.status_code} {response.reason}"
+        )
         # raise error if response is an 404, 503, 500, 403 etc.
         response.raise_for_status()
         return response
