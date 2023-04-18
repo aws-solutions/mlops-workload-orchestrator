@@ -1,6 +1,6 @@
-sagemaker==2.128.0
+sagemaker==2.146.0
 boto3==1.26.46
 crhelper==2.0.6
 pytest==7.2.0
 pytest-cov==4.0.0
-moto[all]==4.0.7
+moto[all]==4.1.3

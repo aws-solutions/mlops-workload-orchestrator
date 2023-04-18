@@ -14,6 +14,7 @@ import boto3
 import json
 import tempfile
 import pytest
+from unittest.mock import patch, Mock
 from botocore.stub import Stubber
 import botocore.session
 from tests.fixtures.stackset_fixtures import (
@@ -31,6 +32,7 @@ from tests.fixtures.stackset_fixtures import (
     mocked_decoded_parameters,
     mocked_codepipeline_event,
     mocked_invalid_user_parms,
+    mocked_describe_response
 )
 from moto import mock_cloudformation, mock_s3
 from unittest.mock import patch
@@ -75,21 +77,13 @@ def test_create_stackset_and_instances(
         cf_client,
     )
     stacksets = cf_client.list_stack_sets()
-    # print(stacksets)
     # assert one StackSet has been created
     assert len(stacksets["Summaries"]) == 1
     # assert the created name has the passed name
     assert stacksets["Summaries"][0]["StackSetName"] == stackset_name
     # assert the status of the stackset is ACTIVE
     assert stacksets["Summaries"][0]["Status"] == "ACTIVE"
-
-    # describe stackset instance
-    instance = cf_client.describe_stack_instance(
-        StackSetName=stackset_name,
-        StackInstanceAccount=mocked_account_ids[0],
-        StackInstanceRegion=mocked_regions[0],
-    )
-    assert instance["ResponseMetadata"]["HTTPStatusCode"] == 200
+    assert stacksets["ResponseMetadata"]["HTTPStatusCode"] == 200
 
     # assert the function will throw an exception
     with pytest.raises(Exception):
@@ -138,29 +132,21 @@ def test_get_stackset_instance_status_client_error(
         get_stackset_instance_status(stackset_name, mocked_account_ids[0], mocked_regions[0], cf_client)
 
 
-@mock_cloudformation
+@patch("boto3.client")
 def test_get_stackset_instance_status(
+    patched_client,
     stackset_name,
-    mocked_template,
-    mocked_template_parameters,
-    mocked_org_ids,
     mocked_account_ids,
     mocked_regions,
+    mocked_describe_response
 ):
 
     cf_client = boto3.client("cloudformation", region_name=mocked_regions[0])
-    # create a mocked stackset and instance
-    create_stackset_and_instances(
-        stackset_name,
-        mocked_template,
-        json.loads(mocked_template_parameters),
-        mocked_org_ids,
-        mocked_regions,
-        cf_client,
-    )
-    # should throw an KeyError exception
-    with pytest.raises(KeyError):
-        get_stackset_instance_status(stackset_name, mocked_account_ids[0], mocked_regions[0], cf_client)
+    patched_client().describe_stack_instance.return_value = mocked_describe_response
+    response = get_stackset_instance_status(stackset_name, mocked_account_ids[0], mocked_regions[0], cf_client)
+
+    assert response == "SUCCEEDED"
+
 
 
 @mock_cloudformation

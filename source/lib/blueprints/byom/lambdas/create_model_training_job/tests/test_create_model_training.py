@@ -24,10 +24,16 @@ from tests.fixtures.training_fixtures import (
     mocked_job_name,
     mocked_raw_search_grid,
     mocked_hyperparameter_ranges,
+    mocked_sagemaker_session,
 )
 
 
-def test_create_estimator(mocked_estimator_config, mocked_hyperparameters, mocked_data_channels, mocked_job_name):
+def test_create_estimator(
+    mocked_estimator_config,
+    mocked_hyperparameters,
+    mocked_data_channels,
+    mocked_job_name,
+):
     job = SolutionModelTraining(
         job_name=mocked_job_name,
         estimator_config=mocked_estimator_config,
@@ -69,14 +75,17 @@ def test_create_hyperparameter_tuner(
     assert tuner.max_jobs == 10
     assert tuner.strategy == "Bayesian"
     assert tuner.objective_type == "Maximize"
-    TestCase().assertDictEqual(tuner._hyperparameter_ranges, mocked_hyperparameter_ranges)
+    TestCase().assertDictEqual(
+        tuner._hyperparameter_ranges, mocked_hyperparameter_ranges
+    )
 
 
 def test_format_search_grid(mocked_raw_search_grid):
     formeated_grid = SolutionModelTraining.format_search_grid(mocked_raw_search_grid)
     # assert a Continuous parameter
     TestCase().assertListEqual(
-        mocked_raw_search_grid["eta"][1], [formeated_grid["eta"].min_value, formeated_grid["eta"].max_value]
+        mocked_raw_search_grid["eta"][1],
+        [formeated_grid["eta"].min_value, formeated_grid["eta"].max_value],
     )
     # assert an Integer parameter
     TestCase().assertListEqual(
@@ -84,7 +93,9 @@ def test_format_search_grid(mocked_raw_search_grid):
         [formeated_grid["max_depth"].min_value, formeated_grid["max_depth"].max_value],
     )
     # assert a Categorical parameter
-    TestCase().assertListEqual(mocked_raw_search_grid["optimizer"][1], formeated_grid["optimizer"].values)
+    TestCase().assertListEqual(
+        mocked_raw_search_grid["optimizer"][1], formeated_grid["optimizer"].values
+    )
 
 
 @patch("model_training_helper.SolutionModelTraining._create_hyperparameter_tuner")
@@ -127,7 +138,9 @@ def test_create_training_job(
 @patch("model_training_helper.SolutionModelTraining._create_estimator")
 @patch("main.Session")
 @patch("main.get_client")
-def test_handler_training_job(mocked_client, mocked_session, mocked_create_estimator, mocked_training_job_env_vars):
+def test_handler_training_job(
+    mocked_client, mocked_session, mocked_create_estimator, mocked_training_job_env_vars
+):
     mocked_client.boto_region_name = "us-east-1"
     from main import handler
 

@@ -64,7 +64,7 @@ def sagemaker_layer(scope, blueprint_bucket):
         scope,
         "sagemakerlayer",
         code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/sagemaker_layer.zip"),
-        compatible_runtimes=[lambda_.Runtime.PYTHON_3_8],
+        compatible_runtimes=[lambda_.Runtime.PYTHON_3_9],
     )
 
 
@@ -137,7 +137,7 @@ def batch_transform(
     batch_transform_lambda = lambda_.Function(
         scope,
         id,
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         handler=lambda_handler,
         layers=[sm_layer],
         role=lambda_role,
@@ -334,7 +334,7 @@ def create_baseline_job_lambda(
     create_baseline_job_lambda = lambda_.Function(
         scope,
         "create_data_baseline_job",
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         handler=lambda_handler,
         role=lambda_role,
         code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_baseline_job.zip"),
@@ -414,7 +414,7 @@ def create_stackset_action(
     create_update_cf_stackset_lambda = lambda_.Function(
         scope,
         f"{action_name}_stackset_lambda",
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         handler="main.lambda_handler",
         role=lambda_role,
         code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/create_update_cf_stackset.zip"),
@@ -507,7 +507,7 @@ def create_invoke_lambda_custom_resource(
         id,
         code=lambda_.Code.from_bucket(blueprint_bucket, "blueprints/byom/lambdas/invoke_lambda_custom_resource.zip"),
         handler="index.handler",
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         timeout=core.Duration.minutes(5),
     )
 
@@ -557,7 +557,7 @@ def create_copy_assets_lambda(scope, blueprint_repository_bucket_name):
         "CustomResourceLambda",
         code=lambda_.Code.from_asset("lambdas/custom_resource"),
         handler="index.on_event",
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         memory_size=256,
         environment={
             "SOURCE_BUCKET": source_bucket,
@@ -592,7 +592,7 @@ def create_solution_helper(scope):
         "SolutionHelper",
         code=lambda_.Code.from_asset("lambdas/solution_helper"),
         handler="lambda_function.handler",
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         timeout=core.Duration.minutes(5),
     )
 
@@ -742,7 +742,7 @@ def autopilot_training_job(
     autopilot_lambda = lambda_.Function(
         scope,
         id,
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         handler=lambda_handler,
         layers=[sm_layer],
         role=lambda_role,
@@ -863,7 +863,7 @@ def model_training_job(
     training_lambda = lambda_.Function(
         scope,
         id,
-        runtime=lambda_.Runtime.PYTHON_3_8,
+        runtime=lambda_.Runtime.PYTHON_3_9,
         handler=lambda_handler,
         layers=[sm_layer],
         role=lambda_role,

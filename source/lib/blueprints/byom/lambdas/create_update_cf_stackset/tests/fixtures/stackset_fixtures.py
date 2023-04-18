@@ -48,6 +48,9 @@ def mocked_cp_success_message():
 def mocked_cp_failure_message():
     return "StackSet Job Failed"
 
+@pytest.fixture()
+def mocked_describe_response():
+    return {'StackInstance':{"StackInstanceStatus": {"DetailedStatus": "SUCCEEDED"}}}
 
 @pytest.fixture()
 def mocked_cp_continuation_message():
