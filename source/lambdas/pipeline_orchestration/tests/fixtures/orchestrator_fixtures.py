@@ -73,7 +73,11 @@ def api_byom_event():
                 "False": os.environ["INSTANCETYPE"],
             },
             batch_job_output_location={
-                "True": {"dev": "bucket/dev_output", "staging": "bucket/staging_output", "prod": "bucket/prod_output"},
+                "True": {
+                    "dev": "bucket/dev_output",
+                    "staging": "bucket/staging_output",
+                    "prod": "bucket/prod_output",
+                },
                 "False": os.environ["BATCHOUTPUT"],
             },
             data_capture_location={
@@ -103,10 +107,14 @@ def api_byom_event():
 
         if pipeline_type in ["byom_batch_builtin", "byom_batch_custom"]:
             event["batch_inference_data"] = os.environ["INFERENCEDATA"]
-            event["batch_job_output_location"] = maping["batch_job_output_location"][str(is_multi)]
+            event["batch_job_output_location"] = maping["batch_job_output_location"][
+                str(is_multi)
+            ]
 
         if pipeline_type in ["byom_realtime_builtin", "byom_realtime_custom"]:
-            event["data_capture_location"] = maping["data_capture_location"][str(is_multi)]
+            event["data_capture_location"] = maping["data_capture_location"][
+                str(is_multi)
+            ]
             # add optional endpoint_name
             if endpint_name_provided:
                 event["endpoint_name"] = maping["endpoint_name"][str(is_multi)]
@@ -203,7 +211,12 @@ def api_training_event():
             "training_data": "train/data.csv",
             "target_attribute": "target",
             "job_output_location": "training-output",
-            "algo_hyperparamaters": dict(eval_metric="auc", objective="binary:logistic", num_round=400, rate_drop=0.3),
+            "algo_hyperparamaters": dict(
+                eval_metric="auc",
+                objective="binary:logistic",
+                num_round=400,
+                rate_drop=0.3,
+            ),
             "tuner_configs": dict(
                 early_stopping_type="Auto",
                 objective_metric_name="validation:auc",
@@ -259,7 +272,10 @@ def expected_data_quality_monitor_params():
         ("DataCaptureBucket", "testbucket"),
         ("DataCaptureLocation", os.environ["BASELINEOUTPUT"]),
         ("EndpointName", "test_endpoint"),
-        ("ImageUri", "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer"),
+        (
+            "ImageUri",
+            "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer",
+        ),
         ("InstanceType", os.environ["INSTANCETYPE"]),
         ("InstanceVolumeSize", "20"),
         ("BaselineMaxRuntimeSeconds", "3600"),
@@ -350,7 +366,10 @@ def expected_image_builder_params():
 def expected_realtime_specific_params():
     def _expected_realtime_specific_params(endpoint_name_provided=False):
         endpoint_name = "test-endpoint" if endpoint_name_provided else ""
-        return [("DataCaptureLocation", os.environ["DATACAPTURE"]), ("EndpointName", endpoint_name)]
+        return [
+            ("DataCaptureLocation", os.environ["DATACAPTURE"]),
+            ("EndpointName", endpoint_name),
+        ]
 
     return _expected_realtime_specific_params
 
@@ -381,7 +400,10 @@ def stack_id():
 @pytest.fixture
 def expected_multi_account_params_format():
     return [
-        {"ParameterKey": "NotificationsSNSTopicArn", "ParameterValue": os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"]},
+        {
+            "ParameterKey": "NotificationsSNSTopicArn",
+            "ParameterValue": os.environ["MLOPS_NOTIFICATIONS_SNS_TOPIC"],
+        },
         {"ParameterKey": "AssetsBucket", "ParameterValue": "testassetsbucket"},
         {"ParameterKey": "CustomImage", "ParameterValue": os.environ["CUSTOMIMAGE"]},
         {"ParameterKey": "ECRRepoName", "ParameterValue": "mlops-ecrrep"},
@@ -536,7 +558,10 @@ def required_api_keys_model_monitor():
             return common_keys
 
         # ModelQuality specific keys
-        model_quality_keys = ["baseline_inference_attribute", "baseline_ground_truth_attribute"]
+        model_quality_keys = [
+            "baseline_inference_attribute",
+            "baseline_ground_truth_attribute",
+        ]
         # common model related monitors
         common_model_keys = ["problem_type"]
         # add required keys based on problem type
@@ -714,7 +739,9 @@ def generate_names():
 @pytest.fixture
 def template_parameters_model_monitor(generate_names):
     def _template_parameters_model_monitor(event):
-        baseline_job_name, monitoring_schedule_name = generate_names("test-endpoint", "dataquality")
+        baseline_job_name, monitoring_schedule_name = generate_names(
+            "test-endpoint", "dataquality"
+        )
         template_parameters = [
             {
                 "ParameterKey": "NotificationsSNSTopicArn",
@@ -804,15 +831,22 @@ def get_parameters_keys():
 
 @pytest.fixture
 def cf_client_params(api_byom_event, template_parameters_realtime_builtin):
-    template_parameters = template_parameters_realtime_builtin(api_byom_event("byom_realtime_builtin"))
+    template_parameters = template_parameters_realtime_builtin(
+        api_byom_event("byom_realtime_builtin")
+    )
     cf_params = {
         "Capabilities": ["CAPABILITY_IAM"],
         "OnFailure": "DO_NOTHING",
         "Parameters": template_parameters,
         "RoleARN": "arn:aws:role:region:account:action",
         "StackName": "teststack-testmodel-BYOMPipelineReatimeBuiltIn",
-        "Tags": [{"Key": "stack_name", "Value": "teststack-testmodel-BYOMPipelineReatimeBuiltIn"}],
-        "TemplateURL": "https://testurl/blueprints/byom/byom_realtime_builtin_container.yaml",
+        "Tags": [
+            {
+                "Key": "stack_name",
+                "Value": "teststack-testmodel-BYOMPipelineReatimeBuiltIn",
+            }
+        ],
+        "TemplateURL": "https://testurl/blueprints/byom_realtime_builtin_container.yaml",
     }
     return cf_params
 

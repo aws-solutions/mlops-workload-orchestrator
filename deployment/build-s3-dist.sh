@@ -28,7 +28,7 @@
 set -e
 
 # Important: CDK global version number
-cdk_version=1.126.0
+cdk_version=2.87.0
 
 # Check to see if the required parameters have been provided:
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
@@ -68,18 +68,20 @@ echo "--------------------------------------------------------------------------
 echo "cd $source_dir"
 cd $source_dir
 
-# setup lambda layers (building sagemaker layer using lambda build environment for python 3.8)
-echo 'docker run --entrypoint /bin/bash -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task public.ecr.aws/lambda/python:3.9 -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"'
-docker run --entrypoint /bin/bash -v "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer:/var/task public.ecr.aws/lambda/python:3.9 -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"
+# setup lambda layers (building sagemaker layer using lambda build environment for python 3.10)
+echo 'docker run --entrypoint /bin/bash -v "$source_dir"/infrastructure/lib/blueprints/lambdas/sagemaker_layer:/var/task public.ecr.aws/lambda/python:3.10 -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"'
+docker run --entrypoint /bin/bash -v "$source_dir"/infrastructure/lib/blueprints/lambdas/sagemaker_layer:/var/task public.ecr.aws/lambda/python:3.10 -c "cat requirements.txt; pip3 install -r requirements.txt -t ./python; exit"
 
 # Remove tests and cache stuff (to reduce size)
-find "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer/python -type d -name "tests" -exec rm -rfv {} +
-find "$source_dir"/lib/blueprints/byom/lambdas/sagemaker_layer/python -type d -name "__pycache__" -exec rm -rfv {} +
+find "$source_dir"/infrastructure/lib/blueprints/lambdas/sagemaker_layer/python -type d -name "tests" -exec rm -rfv {} +
+find "$source_dir"/infrastructure/lib/blueprints/lambdas/sagemaker_layer/python -type d -name "__pycache__" -exec rm -rfv {} +
 
 echo "python3 -m venv .venv-prod"
 python3 -m venv .venv-prod
 echo "source .venv-prod/bin/activate"
 source .venv-prod/bin/activate
+echo "upgrading pip -> python3 -m pip install --upgrade pip"
+python3 -m pip install --upgrade pip
 echo "pip install -r requirements.txt"
 pip install -r requirements.txt
 
@@ -92,8 +94,8 @@ echo "pip install -r ./lambdas/solution_helper/requirements.txt -t ./lambdas/sol
 pip install -r ./lambdas/solution_helper/requirements.txt -t ./lambdas/solution_helper/
 
 # setup crhelper for invoke lambda custom resource
-echo "pip install -r ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/"
-pip install -r ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./lib/blueprints/byom/lambdas/invoke_lambda_custom_resource/
+echo "pip install -r ./infrastructure/lib/blueprints/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./infrastructure/lib/blueprints/lambdas/invoke_lambda_custom_resource/"
+pip install -r ./infrastructure/lib/blueprints/lambdas/invoke_lambda_custom_resource/requirements.txt -t ./infrastructure/lib/blueprints/lambdas/invoke_lambda_custom_resource/
 
 echo "------------------------------------------------------------------------------"
 echo "[Init] Install dependencies for the cdk-solution-helper"
@@ -114,64 +116,94 @@ cd $source_dir
 echo "npm install -g aws-cdk@$cdk_version"
 npm install -g aws-cdk@$cdk_version
 
+# move to the infrastructure dir
+cd $source_dir/infrastructure
 #Run 'cdk synth for BYOM blueprints
-echo "cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth DataQualityModelMonitorStack > lib/blueprints/byom/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth ModelQualityModelMonitorStack > lib/blueprints/byom/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth ModelBiasModelMonitorStack > lib/blueprints/byom/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth ModelExplainabilityModelMonitorStack > lib/blueprints/byom/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth SingleAccountCodePipelineStack > lib/blueprints/byom/single_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth MultiAccountCodePipelineStack > lib/blueprints/byom/multi_account_codepipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth BYOMRealtimePipelineStack > lib/blueprints/byom/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth BYOMCustomAlgorithmImageBuilderStack > lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth BYOMBatchStack > lib/blueprints/byom/byom_batch_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth AutopilotJobStack > lib/blueprints/byom/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth TrainingJobStack > lib/blueprints/byom/model_training_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
-echo "cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false"
-cdk synth HyperparamaterTunningJobStack > lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false --generate-bootstrap-version-rule false
+echo "cdk synth DataQualityModelMonitorStack > $staging_dist_dir/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth DataQualityModelMonitorStack > $staging_dist_dir/byom_data_quality_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth ModelQualityModelMonitorStack > $staging_dist_dir/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth ModelQualityModelMonitorStack > $staging_dist_dir/byom_model_quality_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth ModelBiasModelMonitorStack > $staging_dist_dir/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth ModelBiasModelMonitorStack > $staging_dist_dir/byom_model_bias_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth ModelExplainabilityModelMonitorStack > $staging_dist_dir/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false"
+cdk synth ModelExplainabilityModelMonitorStack > $staging_dist_dir/byom_model_explainability_monitor.yaml --path-metadata false --version-reporting false
+echo "cdk synth SingleAccountCodePipelineStack > $staging_dist_dir/single_account_codepipeline.yaml --path-metadata false --version-reporting false"
+cdk synth SingleAccountCodePipelineStack > $staging_dist_dir/single_account_codepipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth MultiAccountCodePipelineStack > $staging_dist_dir/multi_account_codepipeline.yaml --path-metadata false --version-reporting false"
+cdk synth MultiAccountCodePipelineStack > $staging_dist_dir/multi_account_codepipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth BYOMRealtimePipelineStack > $staging_dist_dir/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth BYOMRealtimePipelineStack > $staging_dist_dir/byom_realtime_inference_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth BYOMCustomAlgorithmImageBuilderStack > $staging_dist_dir/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false"
+cdk synth BYOMCustomAlgorithmImageBuilderStack > $staging_dist_dir/byom_custom_algorithm_image_builder.yaml --path-metadata false --version-reporting false
+echo "cdk synth BYOMBatchStack > $staging_dist_dir/byom_batch_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth BYOMBatchStack > $staging_dist_dir/byom_batch_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth AutopilotJobStack > $staging_dist_dir/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth AutopilotJobStack > $staging_dist_dir/autopilot_training_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth TrainingJobStack > $staging_dist_dir/model_training_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth TrainingJobStack > $staging_dist_dir/model_training_pipeline.yaml --path-metadata false --version-reporting false
+echo "cdk synth HyperparamaterTunningJobStack > $staging_dist_dir/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false"
+cdk synth HyperparamaterTunningJobStack > $staging_dist_dir/model_hyperparameter_tunning_pipeline.yaml --path-metadata false --version-reporting false
 
 # Replace %%VERSION%% in other templates
 replace="s/%%VERSION%%/$3/g"
-echo "sed -i -e $replace lib/blueprints/byom/byom_data_quality_monitor.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_data_quality_monitor.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_model_quality_monitor.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_model_quality_monitor.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_model_bias_monitor.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_model_bias_monitor.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_model_explainability_monitor.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_model_explainability_monitor.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_realtime_inference_pipeline.yaml
-echo "sed -i -e $replace lib/blueprints/byom/single_account_codepipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/single_account_codepipeline.yaml
-echo "sed -i -e $replace lib/blueprints/byom/multi_account_codepipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/multi_account_codepipeline.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_custom_algorithm_image_builder.yaml
-echo "sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/byom_batch_pipeline.yaml
-echo "sed -i -e $replace lib/blueprints/byom/autopilot_training_pipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/autopilot_training_pipeline.yaml
-echo "sed -i -e $replace lib/blueprints/byom/model_training_pipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/model_training_pipeline.yaml
-echo "sed -i -e $replace lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml"
-sed -i -e $replace lib/blueprints/byom/model_hyperparameter_tunning_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_data_quality_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_data_quality_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_model_quality_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_model_quality_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_model_bias_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_model_bias_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_model_explainability_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_model_explainability_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_realtime_inference_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/byom_realtime_inference_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/single_account_codepipeline.yaml"
+sed -i -e $replace $staging_dist_dir/single_account_codepipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/multi_account_codepipeline.yaml"
+sed -i -e $replace $staging_dist_dir/multi_account_codepipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_custom_algorithm_image_builder.yaml"
+sed -i -e $replace $staging_dist_dir/byom_custom_algorithm_image_builder.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_batch_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/byom_batch_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/autopilot_training_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/autopilot_training_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/model_training_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/model_training_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/model_hyperparameter_tunning_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/model_hyperparameter_tunning_pipeline.yaml
+
+# replace %%SOLUTION_NAME%% for AppRegistry app
+replace="s/%%SOLUTION_NAME%%/$2/g"
+echo "sed -i -e $replace $staging_dist_dir/byom_data_quality_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_data_quality_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_model_quality_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_model_quality_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_model_bias_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_model_bias_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_model_explainability_monitor.yaml"
+sed -i -e $replace $staging_dist_dir/byom_model_explainability_monitor.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_realtime_inference_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/byom_realtime_inference_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/single_account_codepipeline.yaml"
+sed -i -e $replace $staging_dist_dir/single_account_codepipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/multi_account_codepipeline.yaml"
+sed -i -e $replace $staging_dist_dir/multi_account_codepipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_custom_algorithm_image_builder.yaml"
+sed -i -e $replace $staging_dist_dir/byom_custom_algorithm_image_builder.yaml
+echo "sed -i -e $replace $staging_dist_dir/byom_batch_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/byom_batch_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/autopilot_training_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/autopilot_training_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/model_training_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/model_training_pipeline.yaml
+echo "sed -i -e $replace $staging_dist_dir/model_hyperparameter_tunning_pipeline.yaml"
+sed -i -e $replace $staging_dist_dir/model_hyperparameter_tunning_pipeline.yaml
+
 
 # Run 'cdk synth' for main templates to generate raw solution outputs
-echo "cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir"
-cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir
-echo "cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir"
-cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --generate-bootstrap-version-rule false --output=$staging_dist_dir
+echo "cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
+cdk synth mlops-workload-orchestrator-single-account --path-metadata false --version-reporting false --output=$staging_dist_dir
+echo "cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --output=$staging_dist_dir"
+cdk synth mlops-workload-orchestrator-multi-account --path-metadata false --version-reporting false --output=$staging_dist_dir
 
 # Remove unnecessary output files
 echo "cd $staging_dist_dir"
@@ -186,7 +218,8 @@ echo "--------------------------------------------------------------------------
 # Move outputs from staging to template_dist_dir
 echo "Move outputs from staging to template_dist_dir"
 echo "cp $template_dir/*.template $template_dist_dir/"
-cp $staging_dist_dir/*.template.json $template_dist_dir/
+cp $staging_dist_dir/mlops-workload-orchestrator-single-account.template.json $template_dist_dir/
+cp $staging_dist_dir/mlops-workload-orchestrator-multi-account.template.json $template_dist_dir/
 rm *.template.json
 
 # Rename all *.template.json files to *.template
@@ -215,11 +248,13 @@ echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-a
 sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template
 echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template"
 sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template
+
 replace="s/%%SOLUTION_NAME%%/$2/g"
 echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account"
 sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template
 echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template"
 sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-multi-account.template
+
 replace="s/%%VERSION%%/$3/g"
 echo "sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template"
 sed -i -e $replace $template_dist_dir/mlops-workload-orchestrator-single-account.template
@@ -265,8 +300,10 @@ done
 echo "Creating zip files for the blueprint stacks"
 echo "mkdir -p $template_dir/bp_staging"
 mkdir -p $template_dir/bp_staging
-echo "cp -r $source_dir/lib/blueprints $template_dir/bp_staging/"
-cp -r $source_dir/lib/blueprints $template_dir/bp_staging/
+echo "cp -r $source_dir/infrastructure/lib/blueprints $template_dir/bp_staging/"
+cp -r $source_dir/infrastructure/lib/blueprints $template_dir/bp_staging/
+
+
 
 echo "cp -r $source_dir/lambdas/pipeline_orchestration/shared $template_dir/bp_staging/"
 cp -r $source_dir/lambdas/pipeline_orchestration/shared $template_dir/bp_staging/
@@ -277,41 +314,43 @@ rm -rf **/__pycache__/
 rm -rf **/*.egg-info/
 cd $template_dir/bp_staging/blueprints
 
+# copy *.yaml templaes to the main blueprints folder
+echo "cp -r $staging_dist_dir/*.yaml $template_dir/bp_staging/blueprints/"
+cp -r $staging_dist_dir/*.yaml $template_dir/bp_staging/blueprints/
+
 # Loop through all blueprint directories in blueprints
 for bp in `find . -mindepth 1 -maxdepth 1 -type d`; do
+    echo "subdirector: $bp"
+    # # Loop through all subdirectories in blueprints/<blueprint_type>
+    if [ $bp != "./lambdas" ]; then
+        # Remove any directory that is not 'lambdas'
+        rm -rf $bp
+    fi
+done
 
-    cd $bp
-    # Loop through all subdirectories in blueprints/<blueprint_type> e.g., byom
-    for d in `find . -mindepth 1 -maxdepth 1 -type d`; do
-        if [ $d != "./lambdas" ]; then
-            # Remove any directory that is not 'lambdas'
-            rm -rf $d
-        fi
-    done
+cd lambdas
+# Loop through all lambda directories of the <blueprint_type>
+for lambda in `find . -mindepth 1 -maxdepth 1 -type d`; do
 
-    cd lambdas
-    # Loop through all lambda directories of the <blueprint_type>
-    for lambda in `find . -mindepth 1 -maxdepth 1 -type d`; do
+    # Copying shared source codes to each lambda function
+    echo "cp -r $template_dir/bp_staging/shared $lambda"
+    cp -r $template_dir/bp_staging/shared $lambda
 
-        # Copying shared source codes to each lambda function
-        echo "cp -r $template_dir/bp_staging/shared $lambda"
-        cp -r $template_dir/bp_staging/shared $lambda
+    # Removing './' from the directory name to use for zip file
+    echo "lambda_dir_name=`echo $lambda | cut -d '/' -f 2`"
+    lambda_dir_name=`echo $lambda | cut -d '/' -f 2`
 
-        # Removing './' from the directory name to use for zip file
-        echo "lambda_dir_name=`echo $lambda | cut -d '/' -f 2`"
-        lambda_dir_name=`echo $lambda | cut -d '/' -f 2`
+    cd $lambda_dir_name
 
-        cd $lambda_dir_name
+    # Creating the zip file for each lambda
+    echo "zip -r9 ../$lambda_dir_name.zip *"
+    zip -r9 ../$lambda_dir_name.zip *
+    cd ..
 
-        # Creating the zip file for each lambda
-        echo "zip -r9 ../$lambda_dir_name.zip *"
-        zip -r9 ../$lambda_dir_name.zip *
-        cd ..
-
-        # Removing the lambda directories after creating zip files of them
-        echo "rm -rf $lambda"
-        rm -rf $lambda
-    done
+    # Removing the lambda directories after creating zip files of them
+    echo "rm -rf $lambda"
+    rm -rf $lambda
+    
 done
 
 cd $template_dir/bp_staging/blueprints
@@ -319,6 +358,7 @@ cd $template_dir/bp_staging/blueprints
 rm -f *.py
 rm -f */*.py
 rm -f */*/*.py
+rm -f */__pycache__
 
 cd $template_dir/bp_staging
 

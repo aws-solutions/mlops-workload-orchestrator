@@ -52,29 +52,40 @@ The solution uses [AWS Organizations](https://aws.amazon.com/organizations/) and
 Upon successfully cloning the repository into your local development environment but **prior** to running the initialization script, you will see the following file structure in your editor:
 
 ```
-├── deployment                            [folder containing build scripts]
-│   ├── cdk-solution-helper               [A helper function to help deploy lambda function code through S3 buckets]
-│   ├── build-s3-dist.sh                  [A script to prepare the solution for deploying from source code]
-├── source                                [source code containing CDK App and lambda functions]
-│   ├── lambdas                           [folder containing source code the lambda functions]
-│   │   ├── custom_resource               [lambda function to copy necessary resources from aws solutions bucket]
-│   │   ├── pipeline_orchestration        [lambda function to provision ML pipelines]
-│   └── lib
-│       ├── blueprints                    [folder containing implementations of different types of ML pipelines supported by this solution]
-│       │   ├── byom                      [implementation of bring-your-own-model ML pipeline]
-│       │   │   ├── lambdas               [folder containing source code the lambda functions]
-│       │   │   └── pipeline_definitions  [folder containing CDK implementation of pipeline stages in BYOM]
-│       ├── aws_mlops_stack.py            [CDK implementation of the main framework ]
-│       └── conditional_resource.py       [a helper file to enable conditional resource provisioning in CDK]
-├── .gitignore
-├── CHANGELOG.md                          [required for every solution to include changes based on version to auto[uild release notes]
-├── CODE_OF_CONDUCT.md                    [standardized open source file for all solutions]
-├── CONTRIBUTING.md                       [standardized open source file for all solutions]
-├── LICENSE.txt                           [required open source file for all solutions - should contain the Apache 2.0 license]
-├── NOTICE.txt                            [required open source file for all solutions - should contain references to all 3rd party libraries]
-└── README.md                             [required file for all solutions]
-
-* Note: Not all languages are supported at this time. Actual appearance may vary depending on release.
+├── CHANGELOG.md
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── LICENSE.txt
+├── NOTICE.txt
+├── README.md
+├── deployment                [folder containing build/test scripts]
+│   ├── build-s3-dist.sh
+│   ├── run-all-tests.sh
+│   ├── cdk-solution-helper
+└── source
+    ├── infrastructure        [folder containing CDK code and lambdas for ML pipelines]
+    │   ├── lib
+    │   │   ├── blueprints
+    │   │   │   ├── aspects
+    │   │   │   ├── lambdas
+    │   │   │   │   ├── batch_transform
+    │   │   │   │   ├── create_baseline_job
+    │   │   │   │   ├── create_model_training_job
+    │   │   │   │   ├── create_sagemaker_autopilot_job
+    │   │   │   │   ├── create_update_cf_stackset
+    │   │   │   │   ├── inference
+    │   │   │   │   ├── invoke_lambda_custom_resource
+    │   │   │   │   └── sagemaker_layer
+    │   │   │   ├── ml_pipelines
+    │   │   │   └── pipeline_definitions
+    │   │   └── mlops_orchestrator_stack.py
+    │   └── test             [folder containing CDK unit tests]
+    ├── lambdas              [folder containing lambdas for the main templates]
+    │   ├── custom_resource
+    │   ├── pipeline_orchestration
+    │   └── solution_helper
+    ├── requirements-test.txt
+    └── requirements.txt
 ```
 
 ## Creating a custom build
@@ -142,7 +153,7 @@ Please refer to the [Uninstall the solution section](https://docs.aws.amazon.com
 
 ## Collection of operational metrics
 
-This solution collects anonymous operational metrics to help AWS improve the quality and features of the solution. For more information, including how to disable this capability, please see the [implementation guide](https://docs.aws.amazon.com/solutions/latest/mlops-workload-orchestrator/operational-metrics.html).
+This solution collects anonymized operational metrics to help AWS improve the quality and features of the solution. For more information, including how to disable this capability, please see the [implementation guide](https://docs.aws.amazon.com/solutions/latest/mlops-workload-orchestrator/operational-metrics.html).
 
 ## Known Issues
 
