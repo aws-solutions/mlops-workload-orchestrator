@@ -1,0 +1,13 @@
+{
+  "app": "python3 app.py",
+  "context": {
+    "SolutionId": "SO0136",
+    "SolutionName": "%%SOLUTION_NAME%%",
+    "Version": "%%VERSION%%",
+    "AppRegistryName": "mlops", 
+    "ApplicationType": "AWS-Solutions",
+    "SourceBucket": "%%BUCKET_NAME%%",
+    "BlueprintsFile": "blueprints.zip"
+    
+  }
+}

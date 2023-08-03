@@ -100,7 +100,9 @@ content_type = "plain/text"
 
 def test_handler():
     # event["path"] == "/provisionpipeline" and pipeline_type is model_crad operation
-    with patch("pipeline_orchestration.index.provision_model_card") as mock_provision_card:
+    with patch(
+        "pipeline_orchestration.index.provision_model_card"
+    ) as mock_provision_card:
         event = {
             "httpMethod": "POST",
             "path": "/provisionpipeline",
@@ -109,7 +111,9 @@ def test_handler():
         handler(event, {})
         assert mock_provision_card.called is True
     # event["path"] == "/provisionpipeline"
-    with patch("pipeline_orchestration.index.provision_pipeline") as mock_provision_pipeline:
+    with patch(
+        "pipeline_orchestration.index.provision_pipeline"
+    ) as mock_provision_pipeline:
         event = {
             "httpMethod": "POST",
             "path": "/provisionpipeline",
@@ -212,9 +216,14 @@ def test_clean_param():
 
 
 def test_template_url():
-    url = "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints/byom"
-    TestCase().assertEqual(template_url("byom_batch_custom"), "blueprints/byom/byom_batch_pipeline.yaml")
-    TestCase().assertEqual(template_url("single_account_codepipeline"), f"{url}/single_account_codepipeline.yaml")
+    url = "https://" + os.environ["BLUEPRINT_BUCKET_URL"] + "/blueprints"
+    TestCase().assertEqual(
+        template_url("byom_batch_custom"), "blueprints/byom_batch_pipeline.yaml"
+    )
+    TestCase().assertEqual(
+        template_url("single_account_codepipeline"),
+        f"{url}/single_account_codepipeline.yaml",
+    )
     with pytest.raises(Exception):
         template_url("byom_not_supported")
 
@@ -225,7 +234,9 @@ def test_provision_pipeline(api_image_builder_event, api_byom_event):
     expected_response = {
         "statusCode": 200,
         "isBase64Encoded": False,
-        "body": json.dumps({"message": "success: stack creation started", "pipeline_id": "1234"}),
+        "body": json.dumps(
+            {"message": "success: stack creation started", "pipeline_id": "1234"}
+        ),
         "headers": {"Content-Type": content_type},
     }
     # The stubber will be called twice
@@ -241,7 +252,10 @@ def test_provision_pipeline(api_image_builder_event, api_byom_event):
             testfile = tempfile.NamedTemporaryFile()
             s3_client.create_bucket(Bucket="testbucket")
             upload_file_to_s3(
-                testfile.name, "testbucket", "blueprints/byom/byom_realtime_inference_pipeline.yaml", s3_client
+                testfile.name,
+                "testbucket",
+                "blueprints/byom_realtime_inference_pipeline.yaml",
+                s3_client,
             )
             s3_client.create_bucket(Bucket="testassetsbucket")
             response = provision_pipeline(event, client, s3_client)
@@ -262,10 +276,14 @@ def test_download_file_from_s3():
     testfile = tempfile.NamedTemporaryFile()
     s3_client.create_bucket(Bucket="assetsbucket")
     upload_file_to_s3(testfile.name, "assetsbucket", os.environ["TESTFILE"], s3_client)
-    download_file_from_s3("assetsbucket", os.environ["TESTFILE"], testfile.name, s3_client)
+    download_file_from_s3(
+        "assetsbucket", os.environ["TESTFILE"], testfile.name, s3_client
+    )
 
 
-def test_create_codepipeline_stack(cf_client_params, stack_name, stack_id, expected_update_response):
+def test_create_codepipeline_stack(
+    cf_client_params, stack_name, stack_id, expected_update_response
+):
     cf_client = botocore.session.get_session().create_client("cloudformation")
     not_image_stack = "teststack-testmodel-BYOMPipelineReatimeBuiltIn"
     stubber = Stubber(cf_client)
@@ -308,7 +326,9 @@ def test_create_codepipeline_stack(cf_client_params, stack_name, stack_id, expec
             }
         ]
     }
-    stubber.add_response("describe_stacks", describe_cfn_response, describe_expected_params)
+    stubber.add_response(
+        "describe_stacks", describe_cfn_response, describe_expected_params
+    )
     with stubber:
         response = create_codepipeline_stack(
             not_image_stack,
@@ -323,12 +343,19 @@ def test_create_codepipeline_stack(cf_client_params, stack_name, stack_id, expec
     describe_expected_params["StackName"] = stack_name
     describe_cfn_response["Stacks"][0]["StackName"] = stack_name
     stubber.add_client_error("create_stack", service_message="already exists")
-    stubber.add_response("describe_stacks", describe_cfn_response, describe_expected_params)
-    stubber.add_client_error("update_stack", service_message="No updates are to be performed")
+    stubber.add_response(
+        "describe_stacks", describe_cfn_response, describe_expected_params
+    )
+    stubber.add_client_error(
+        "update_stack", service_message="No updates are to be performed"
+    )
     expected_response = expected_update_response
     with stubber:
         response = create_codepipeline_stack(
-            stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client
+            stack_name,
+            expected_params["TemplateURL"],
+            expected_params["Parameters"],
+            cf_client,
         )
 
         assert response == expected_response
@@ -347,16 +374,29 @@ def test_update_stack(cf_client_params, stack_name, stack_id, expected_update_re
 
     with stubber:
         response = update_stack(
-            stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client, stack_id
+            stack_name,
+            expected_params["TemplateURL"],
+            expected_params["Parameters"],
+            cf_client,
+            stack_id,
         )
-        assert response == {**cfn_response, "message": f"Pipeline {stack_name} is being updated."}
+        assert response == {
+            **cfn_response,
+            "message": f"Pipeline {stack_name} is being updated.",
+        }
 
     # Test for no update error
-    stubber.add_client_error("update_stack", service_message="No updates are to be performed")
+    stubber.add_client_error(
+        "update_stack", service_message="No updates are to be performed"
+    )
     expected_response = expected_update_response
     with stubber:
         response = update_stack(
-            stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client, stack_id
+            stack_name,
+            expected_params["TemplateURL"],
+            expected_params["Parameters"],
+            cf_client,
+            stack_id,
         )
         assert response == expected_response
 
@@ -364,11 +404,16 @@ def test_update_stack(cf_client_params, stack_name, stack_id, expected_update_re
     stubber.add_client_error("update_stack", service_message="Some Exception")
     with stubber:
         with pytest.raises(Exception):
-            update_stack(stack_name, expected_params["TemplateURL"], expected_params["Parameters"], cf_client, stack_id)
+            update_stack(
+                stack_name,
+                expected_params["TemplateURL"],
+                expected_params["Parameters"],
+                cf_client,
+                stack_id,
+            )
 
 
 def test_pipeline_status():
-
     cfn_client = botocore.session.get_session().create_client("cloudformation")
     cp_client = botocore.session.get_session().create_client("codepipeline")
 
@@ -450,7 +495,9 @@ def test_pipeline_status():
 
     with cfn_stubber:
         with cp_stubber:
-            response = pipeline_status(event, cfn_client=cfn_client, cp_client=cp_client)
+            response = pipeline_status(
+                event, cfn_client=cfn_client, cp_client=cp_client
+            )
             assert response == expected_response
 
     # test codepipeline has not been created yet
@@ -472,11 +519,15 @@ def test_pipeline_status():
         "body": "pipeline cloudformation stack has not provisioned the pipeline yet.",
         "headers": {"Content-Type": content_type},
     }
-    cfn_stubber.add_response("list_stack_resources", no_cp_cfn_response, cfn_expected_params)
+    cfn_stubber.add_response(
+        "list_stack_resources", no_cp_cfn_response, cfn_expected_params
+    )
 
     with cfn_stubber:
         with cp_stubber:
-            response = pipeline_status(event, cfn_client=cfn_client, cp_client=cp_client)
+            response = pipeline_status(
+                event, cfn_client=cfn_client, cp_client=cp_client
+            )
             assert response == expected_response_no_cp
 
 
@@ -496,7 +547,10 @@ def test_get_stack_name(
     )
     # batch builtin pipeline
     batch_builtin = api_byom_event("byom_batch_builtin")
-    assert get_stack_name(batch_builtin) == f"mlops-pipeline-{batch_builtin['model_name']}-byompipelinebatchbuiltin"
+    assert (
+        get_stack_name(batch_builtin)
+        == f"mlops-pipeline-{batch_builtin['model_name']}-byompipelinebatchbuiltin"
+    )
 
     # data quality monitor pipeline
     assert (
@@ -537,7 +591,13 @@ def test_get_stack_name(
 @patch("solution_model_card.SolutionModelCardAPIs.update")
 @patch("solution_model_card.SolutionModelCardAPIs.create")
 def test_provision_model_card(
-    patched_create, patched_update, patched_describe, patched_delete, patched_export, patched_list, patched_session
+    patched_create,
+    patched_update,
+    patched_describe,
+    patched_delete,
+    patched_export,
+    patched_list,
+    patched_session,
 ):
     # assert the create APIs is called when pipeline_type=create_model_card
     event = dict(pipeline_type="create_model_card")
@@ -615,21 +675,32 @@ def test_get_required_keys(
     expected_keys = required_api_keys_model_monitor("ModelQuality", "Regression")
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in model quality monitor, problem type BinaryClassification
-    returned_keys = get_required_keys("byom_model_quality_monitor", "No", "BinaryClassification")
-    expected_keys = required_api_keys_model_monitor("ModelQuality", "BinaryClassification")
+    returned_keys = get_required_keys(
+        "byom_model_quality_monitor", "No", "BinaryClassification"
+    )
+    expected_keys = required_api_keys_model_monitor(
+        "ModelQuality", "BinaryClassification"
+    )
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in model bias monitor, problem type BinaryClassification
-    returned_keys = get_required_keys("byom_model_bias_monitor", "No", "BinaryClassification")
+    returned_keys = get_required_keys(
+        "byom_model_bias_monitor", "No", "BinaryClassification"
+    )
     expected_keys = required_api_keys_model_monitor("ModelBias", "BinaryClassification")
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # Required keys in model expainability monitor, problem type Regression
-    returned_keys = get_required_keys("byom_model_explainability_monitor", "No", "Regression")
+    returned_keys = get_required_keys(
+        "byom_model_explainability_monitor", "No", "Regression"
+    )
     expected_keys = required_api_keys_model_monitor("ModelExplainability", "Regression")
     TestCase().assertCountEqual(expected_keys, returned_keys)
     # test exception for unsupported problem type
     with pytest.raises(BadRequest) as error:
         get_required_keys("byom_model_quality_monitor", "No", "UnsupportedProblemType")
-    assert str(error.value) == "Bad request format. Unsupported problem_type in byom_model_quality_monitor pipeline"
+    assert (
+        str(error.value)
+        == "Bad request format. Unsupported problem_type in byom_model_quality_monitor pipeline"
+    )
     # Required keys in image builder
     returned_keys = get_required_keys("byom_image_builder", "No")
     expected_keys = required_api_image_builder
@@ -649,9 +720,15 @@ def test_get_required_keys(
 
 def test_get_stage_param(api_byom_event):
     single_event = api_byom_event("byom_realtime_custom", False)
-    TestCase().assertEqual(get_stage_param(single_event, "data_capture_location", "None"), "bucket/datacapture")
+    TestCase().assertEqual(
+        get_stage_param(single_event, "data_capture_location", "None"),
+        "bucket/datacapture",
+    )
     multi_event = api_byom_event("byom_realtime_custom", True)
-    TestCase().assertEqual(get_stage_param(multi_event, "data_capture_location", "dev"), "bucket/dev_datacapture")
+    TestCase().assertEqual(
+        get_stage_param(multi_event, "data_capture_location", "dev"),
+        "bucket/dev_datacapture",
+    )
 
 
 def test_get_template_parameters(
@@ -672,9 +749,14 @@ def test_get_template_parameters(
 ):
     single_event = api_byom_event("byom_realtime_custom", False)
     # realtime pipeline
-    TestCase().assertEqual(get_template_parameters(single_event, False), expected_params_realtime_custom())
+    TestCase().assertEqual(
+        get_template_parameters(single_event, False), expected_params_realtime_custom()
+    )
     # image builder pipeline
-    TestCase().assertEqual(get_template_parameters(api_image_builder_event, False), expected_image_builder_params)
+    TestCase().assertEqual(
+        get_template_parameters(api_image_builder_event, False),
+        expected_image_builder_params,
+    )
     # batch pipeline
     TestCase().assertEqual(
         get_template_parameters(api_byom_event("byom_batch_custom", False), False),
@@ -682,7 +764,11 @@ def test_get_template_parameters(
     )
 
     # additional params used by Model Monitor asserts
-    common_params = [("AssetsBucket", "testassetsbucket"), ("KmsKeyArn", ""), ("BlueprintBucket", "testbucket")]
+    common_params = [
+        ("AssetsBucket", "testassetsbucket"),
+        ("KmsKeyArn", ""),
+        ("BlueprintBucket", "testbucket"),
+    ]
     # data quality pipeline
     assert len(get_template_parameters(api_data_quality_event, False)) == len(
         [
@@ -716,50 +802,90 @@ def test_get_template_parameters(
     )
 
     # autopilot templeate params single account
-    assert len(get_template_parameters(api_training_event("model_autopilot_training"), False)) == 16
+    assert (
+        len(
+            get_template_parameters(
+                api_training_event("model_autopilot_training"), False
+            )
+        )
+        == 16
+    )
 
     # autopilot templeate params multi account
-    assert len(get_template_parameters(api_training_event("model_autopilot_training"), True)) == 16
+    assert (
+        len(
+            get_template_parameters(
+                api_training_event("model_autopilot_training"), True
+            )
+        )
+        == 16
+    )
 
     with patch("lambda_helpers.sagemaker.image_uris.retrieve") as patched_uri:
         patched_uri.return_value = "algo-image"
         # training pipeline params
-        assert len(get_template_parameters(api_training_event("model_training_builtin"), True)) == 24
+        assert (
+            len(
+                get_template_parameters(
+                    api_training_event("model_training_builtin"), True
+                )
+            )
+            == 24
+        )
 
         # hyperparameter tuning
-        assert len(get_template_parameters(api_training_event("model_tuner_builtin"), True)) == 26
+        assert (
+            len(
+                get_template_parameters(api_training_event("model_tuner_builtin"), True)
+            )
+            == 26
+        )
 
     # test for exception
     with pytest.raises(BadRequest):
         get_template_parameters({"pipeline_type": "unsupported"}, False)
 
 
-def test_get_common_realtime_batch_params(api_byom_event, expected_common_realtime_batch_params):
+def test_get_common_realtime_batch_params(
+    api_byom_event, expected_common_realtime_batch_params
+):
     realtime_event = api_byom_event("byom_realtime_custom", False)
     batch_event = api_byom_event("byom_batch_custom", False)
     realtime_event.update(batch_event)
     TestCase().assertEqual(
-        get_common_realtime_batch_params(realtime_event, "us-east-1", "None"), expected_common_realtime_batch_params
+        get_common_realtime_batch_params(realtime_event, "us-east-1", "None"),
+        expected_common_realtime_batch_params,
     )
 
 
-def test_get_realtime_specific_params(api_byom_event, expected_realtime_specific_params):
+def test_get_realtime_specific_params(
+    api_byom_event, expected_realtime_specific_params
+):
     # test with endpoint_name not provided
     realtime_event = api_byom_event("byom_realtime_builtin", False)
-    TestCase().assertEqual(get_realtime_specific_params(realtime_event, "None"), expected_realtime_specific_params())
+    TestCase().assertEqual(
+        get_realtime_specific_params(realtime_event, "None"),
+        expected_realtime_specific_params(),
+    )
     # test with endpoint_name provided
     realtime_event = api_byom_event("byom_realtime_builtin", False, True)
     TestCase().assertEqual(
-        get_realtime_specific_params(realtime_event, "None"), expected_realtime_specific_params(True)
+        get_realtime_specific_params(realtime_event, "None"),
+        expected_realtime_specific_params(True),
     )
     # test with endpoint_name provided for multi-account
     realtime_event = api_byom_event("byom_realtime_builtin", False, True)
-    TestCase().assertEqual(get_realtime_specific_params(realtime_event, "dev"), expected_realtime_specific_params(True))
+    TestCase().assertEqual(
+        get_realtime_specific_params(realtime_event, "dev"),
+        expected_realtime_specific_params(True),
+    )
 
 
 def test_get_batch_specific_params(api_byom_event, expected_batch_specific_params):
     batch_event = api_byom_event("byom_batch_custom", False)
-    TestCase().assertEqual(get_batch_specific_params(batch_event, "None"), expected_batch_specific_params)
+    TestCase().assertEqual(
+        get_batch_specific_params(batch_event, "None"), expected_batch_specific_params
+    )
 
 
 def test_get_built_in_model_monitor_container_uri():
@@ -791,7 +917,9 @@ def test_get_model_monitor_params(
     # The 156813124566 is one of the actual account ids for a public Model Monitor Image provided
     # by the SageMaker service. The reason is I need to provide a valid image URI because the SDK
     # has validation for the inputs
-    mocked_image_retrieve.return_value = "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer"
+    mocked_image_retrieve.return_value = (
+        "156813124566.dkr.ecr.us-east-1.amazonaws.com/sagemaker-model-monitor-analyzer"
+    )
     # data quality monitor
     TestCase().assertEqual(
         len(get_model_monitor_params(api_data_quality_event, "us-east-1", "None")),
@@ -799,33 +927,54 @@ def test_get_model_monitor_params(
     )
     # model quality monitor
     TestCase().assertEqual(
-        len(get_model_monitor_params(api_model_quality_event, "us-east-1", "None", monitoring_type="ModelQuality")),
+        len(
+            get_model_monitor_params(
+                api_model_quality_event,
+                "us-east-1",
+                "None",
+                monitoring_type="ModelQuality",
+            )
+        ),
         len(expected_model_quality_monitor_params),
     )
 
 
-def test_get_image_builder_params(api_image_builder_event, expected_image_builder_params):
-    TestCase().assertEqual(get_image_builder_params(api_image_builder_event), expected_image_builder_params)
+def test_get_image_builder_params(
+    api_image_builder_event, expected_image_builder_params
+):
+    TestCase().assertEqual(
+        get_image_builder_params(api_image_builder_event), expected_image_builder_params
+    )
 
 
 def test_format_template_parameters(
-    expected_image_builder_params, expected_multi_account_params_format, expect_single_account_params_format
+    expected_image_builder_params,
+    expected_multi_account_params_format,
+    expect_single_account_params_format,
 ):
     TestCase().assertEqual(
-        format_template_parameters(expected_image_builder_params, "True"), expected_multi_account_params_format
+        format_template_parameters(expected_image_builder_params, "True"),
+        expected_multi_account_params_format,
     )
     TestCase().assertEqual(
-        format_template_parameters(expected_image_builder_params, "False"), expect_single_account_params_format
+        format_template_parameters(expected_image_builder_params, "False"),
+        expect_single_account_params_format,
     )
 
 
 @patch("lambda_helpers.sagemaker.image_uris.retrieve")
 def test_get_image_uri(mocked_sm, api_byom_event):
     custom_event = api_byom_event("byom_realtime_custom", False)
-    TestCase().assertEqual(get_image_uri("byom_realtime_custom", custom_event, "us-east-1"), "custom-image-uri")
+    TestCase().assertEqual(
+        get_image_uri("byom_realtime_custom", custom_event, "us-east-1"),
+        "custom-image-uri",
+    )
     mocked_sm.return_value = "test-image-uri"
     builtin_event = api_byom_event("byom_realtime_builtin", False)
-    TestCase().assertEqual(get_image_uri("byom_realtime_builtin", builtin_event, "us-east-1"), "test-image-uri")
+    TestCase().assertEqual(
+        get_image_uri("byom_realtime_builtin", builtin_event, "us-east-1"),
+        "test-image-uri",
+    )
     mocked_sm.assert_called_with(
         framework=builtin_event.get("model_framework"),
         region="us-east-1",
@@ -860,11 +1009,23 @@ def test_create_template_zip_file(
     s3_client = boto3.client("s3", region_name="us-east-1")
     # multi account
     create_template_zip_file(
-        api_image_builder_event, "blueprint", "assets_bucket", "byom/template.yaml", "zipfile", "True", s3_client
+        api_image_builder_event,
+        "blueprint",
+        "assets_bucket",
+        "byom/template.yaml",
+        "zipfile",
+        "True",
+        s3_client,
     )
     # single account
     create_template_zip_file(
-        api_image_builder_event, "blueprint", "assets_bucket", "byom/template.yaml", "zipfile", "False", s3_client
+        api_image_builder_event,
+        "blueprint",
+        "assets_bucket",
+        "byom/template.yaml",
+        "zipfile",
+        "False",
+        s3_client,
     )
 
 
@@ -879,7 +1040,11 @@ def test_get_codepipeline_params():
     # multi account codepipeline
     TestCase().assertEqual(
         get_codepipeline_params(
-            "True", "byom_realtime_builtin", "stack_name", "template_zip_name", "template_file_name"
+            "True",
+            "byom_realtime_builtin",
+            "stack_name",
+            "template_zip_name",
+            "template_file_name",
         ),
         common_params
         + [
@@ -900,7 +1065,11 @@ def test_get_codepipeline_params():
     # test training pipeline with multi-account
     TestCase().assertEqual(
         get_codepipeline_params(
-            "True", "model_training_builtin", "stack_name", "template_zip_name", "template_file_name"
+            "True",
+            "model_training_builtin",
+            "stack_name",
+            "template_zip_name",
+            "template_file_name",
         ),
         common_params + [("TemplateParamsName", "template_params.json")],
     )
@@ -908,7 +1077,11 @@ def test_get_codepipeline_params():
     # single account codepipeline
     TestCase().assertEqual(
         get_codepipeline_params(
-            "False", "byom_realtime_builtin", "stack_name", "template_zip_name", "template_file_name"
+            "False",
+            "byom_realtime_builtin",
+            "stack_name",
+            "template_zip_name",
+            "template_file_name",
         ),
         common_params + [("TemplateParamsName", "template_params.json")],
     )
@@ -924,4 +1097,7 @@ def test_validate(api_byom_event):
     del bad_event["model_artifact_location"]
     with pytest.raises(BadRequest) as execinfo:
         validate(bad_event)
-    assert str(execinfo.value) == "Bad request. API body does not have the necessary parameter: model_artifact_location"
+    assert (
+        str(execinfo.value)
+        == "Bad request. API body does not have the necessary parameter: model_artifact_location"
+    )
