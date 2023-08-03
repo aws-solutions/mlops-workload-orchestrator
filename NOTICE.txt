@@ -11,15 +11,107 @@ THIRD PARTY COMPONENTS
 **********************
 This software includes third party software subject to the following copyrights:
 
-aws-cdk under the Apache License Version 2.0
-AWS SDK under the Apache License Version 2.0
-boto3 under the Apache License Version 2.0
-pytest-env under the Massachusetts Institute of Technology (MIT) license
-crhelper under the Apache License Version 2.0
-jsii under the Apache License Version 2.0
-pytest under the Massachusetts Institute of Technology (MIT) license
-pytest-cov under the Massachusetts Institute of Technology (MIT) license
-pytest-mock under the Massachusetts Institute of Technology (MIT) license
-requests under the Apache License Version 2.0
-sagemaker under the Apache License Version 2.0
-urllib3 under the Massachusetts Institute of Technology (MIT) license
+Jinja2                                                 BSD License                                                 
+MarkupSafe                                             BSD License                                                 
+PyYAML                                                 MIT License                                                 
+Werkzeug                                               BSD License                                                 
+attrs                                                  MIT License                                                 
+aws-cdk-lib                                            Apache-2.0                                                  
+aws-cdk.asset-awscli-v1                                Apache-2.0                                                  
+aws-cdk.asset-kubectl-v20                              Apache-2.0                                                  
+aws-cdk.asset-node-proxy-agent-v5                      Apache-2.0                                                  
+aws-cdk.aws-servicecatalogappregistry-alpha            Apache-2.0                                                  
+aws-sam-translator                                     Apache Software License                                     
+aws-solutions-constructs.aws-apigateway-lambda         Apache-2.0                                                  
+aws-solutions-constructs.aws-lambda-sagemakerendpoint  Apache-2.0                                                  
+aws-solutions-constructs.core                          Apache-2.0                                                  
+aws-xray-sdk                                           Apache Software License                                     
+boto3                                                  Apache Software License                                     
+botocore                                               Apache Software License                                     
+cattrs                                                 MIT License                                                 
+certifi                                                Mozilla Public License 2.0 (MPL 2.0)                        
+cffi                                                   MIT License                                                 
+cfn-lint                                               MIT License                                                 
+charset-normalizer                                     MIT License                                                 
+cloudpickle                                            BSD License                                                 
+constructs                                             Apache-2.0                                                  
+contextlib2                                            Apache Software License; Python Software Foundation License 
+coverage                                               Apache Software License                                     
+crhelper                                               Apache Software License                                     
+cryptography                                           Apache Software License; BSD License                        
+dill                                                   BSD License                                                 
+docker                                                 Apache Software License                                     
+ecdsa                                                  MIT                                                         
+exceptiongroup                                         MIT License                                                 
+google-pasta                                           Apache Software License                                     
+graphql-core                                           MIT License                                                 
+idna                                                   BSD License                                                 
+importlib-metadata                                     Apache Software License                                     
+importlib-resources                                    Apache Software License                                     
+iniconfig                                              MIT License                                                 
+jmespath                                               MIT License                                                 
+jschema-to-python                                      MIT License                                                 
+jsii                                                   Apache Software License                                     
+jsondiff                                               MIT License                                                 
+jsonpatch                                              BSD License                                                 
+jsonpickle                                             BSD License                                                 
+jsonpointer                                            BSD License                                                 
+jsonschema                                             MIT License                                                 
+jsonschema-spec                                        Apache Software License                                     
+jsonschema-specifications                              MIT License                                                 
+junit-xml                                              Freely Distributable; MIT License                           
+lazy-object-proxy                                      BSD License                                                 
+moto                                                   Apache Software License                                     
+mpmath                                                 BSD License                                                 
+multiprocess                                           BSD License                                                 
+networkx                                               BSD License                                                 
+numpy                                                  BSD License                                                 
+openapi-schema-validator                               BSD License                                                 
+openapi-spec-validator                                 Apache Software License                                     
+packaging                                              Apache Software License; BSD License                        
+pandas                                                 BSD License                                                 
+pathable                                               Other/Proprietary License                                   
+pathos                                                 BSD License                                                 
+pbr                                                    Apache Software License                                     
+platformdirs                                           MIT License                                                 
+pluggy                                                 MIT License                                                 
+pox                                                    BSD License                                                 
+ppft                                                   BSD License                                                 
+protobuf                                               BSD-3-Clause                                                
+protobuf3-to-dict                                      Public Domain                                               
+publication                                            MIT License                                                 
+pyasn1                                                 BSD License                                                 
+pycparser                                              BSD License                                                 
+pydantic                                               MIT License                                                 
+pyparsing                                              MIT License                                                 
+pytest                                                 MIT License                                                 
+pytest-cov                                             MIT License                                                 
+python-dateutil                                        Apache Software License; BSD License                        
+python-jose                                            MIT License                                                 
+pytz                                                   MIT License                                                 
+referencing                                            MIT License                                                 
+regex                                                  Apache Software License                                     
+requests                                               Apache Software License                                     
+responses                                              Apache 2.0                                                  
+rfc3339-validator                                      MIT License                                                 
+rpds-py                                                MIT License                                                 
+rsa                                                    Apache Software License                                     
+s3transfer                                             Apache Software License                                     
+sagemaker                                              Apache Software License                                     
+sarif-om                                               MIT License                                                 
+schema                                                 MIT License                                                 
+six                                                    MIT License                                                 
+smdebug-rulesconfig                                    Apache Software License                                     
+sshpubkeys                                             BSD License                                                 
+sympy                                                  BSD License                                                 
+tblib                                                  BSD License                                                 
+tomli                                                  MIT License                                                 
+typeguard                                              MIT License                                                 
+types-PyYAML                                           Apache Software License                                     
+typing_extensions                                      Python Software Foundation License                          
+tzdata                                                 Apache Software License                                     
+urllib3                                                MIT License                                                 
+websocket-client                                       Apache Software License                                     
+wrapt                                                  BSD License                                                 
+xmltodict                                              MIT License                                                 
+zipp                                                   MIT License
