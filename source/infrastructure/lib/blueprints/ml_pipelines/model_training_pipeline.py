@@ -291,6 +291,6 @@ class TrainingJobStack(Stack):
         CfnOutput(
             self,
             id="ValidationDataLocation",
-            value=f"https://s3.console.aws.amazon.com/s3/buckets/{self.assets_bucket_name.value_as_string}/{self.training_data.value_as_string}",
-            description="Training data used by the training job",
+            value=f"https://s3.console.aws.amazon.com/s3/buckets/{self.assets_bucket_name.value_as_string}/{self.validation_data.value_as_string}",
+            description="Validation data used by the training job",
         ).node.condition = self.validation_data_provided

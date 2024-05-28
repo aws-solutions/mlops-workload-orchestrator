@@ -318,28 +318,28 @@ class MultiAccountCodePipelineStack(Stack):
             "DeployDevStackSet"
         ).node.find_child("CodePipelineActionRole").node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_list_function_policy()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_list_function_policy() }
         multi_account_pipeline.node.find_child("DeployStaging").node.find_child(
             "DeployStagingStackSet"
         ).node.find_child("CodePipelineActionRole").node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_list_function_policy()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_list_function_policy() }
 
         multi_account_pipeline.node.find_child("DeployProd").node.find_child(
             "DeployProdStackSet"
         ).node.find_child("CodePipelineActionRole").node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_list_function_policy()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_list_function_policy() }
 
         # add suppression for complex policy
         multi_account_pipeline.node.find_child("Role").node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_iam_complex()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_iam_complex() }
 
         # add ArtifactBucket cfn suppression (not needing a logging bucket)
         multi_account_pipeline.node.find_child(
             "ArtifactsBucket"
-        ).node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_bucket() }
         # attaching iam permissions to the pipelines
         pipeline_permissions(multi_account_pipeline, assets_bucket)
 

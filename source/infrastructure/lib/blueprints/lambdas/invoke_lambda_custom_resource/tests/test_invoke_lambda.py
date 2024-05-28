@@ -13,7 +13,7 @@
 import boto3
 import pytest
 from unittest.mock import patch
-from moto import mock_lambda
+from moto import mock_aws
 from index import invoke_lambda, no_op, handler
 
 
@@ -52,7 +52,7 @@ def test_invoke_lambda(mocked_client, invoke_event, invoke_bad_event):
     )
 
 
-@mock_lambda
+@mock_aws
 def test_invoke_lambda_error(invoke_event):
     mocked_client = boto3.client("lambda")
     with pytest.raises(Exception):

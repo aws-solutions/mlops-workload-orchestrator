@@ -121,7 +121,7 @@ def api_byom_event():
 
         if pipeline_type in ["byom_realtime_builtin", "byom_batch_builtin"]:
             event["model_framework"] = "xgboost"
-            event["model_framework_version"] = "0.90-1"
+            event["model_framework_version"] = "1.2-2"
         elif pipeline_type in ["byom_realtime_custom", "byom_batch_custom"]:
             event["custom_image_uri"] = "custom-image-uri"
 
