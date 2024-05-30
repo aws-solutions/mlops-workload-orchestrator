@@ -14,7 +14,9 @@ This software includes third party software subject to the following copyrights:
 Jinja2                                                 BSD License                                                 
 MarkupSafe                                             BSD License                                                 
 PyYAML                                                 MIT License                                                 
-Werkzeug                                               BSD License                                                 
+Werkzeug                                               BSD License
+annotated-types                                        MIT License
+antlr4-python3-runtime                                 BSD License
 attrs                                                  MIT License                                                 
 aws-cdk-lib                                            Apache-2.0                                                  
 aws-cdk.asset-awscli-v1                                Apache-2.0                                                  
@@ -47,22 +49,27 @@ google-pasta                                           Apache Software License
 graphql-core                                           MIT License                                                 
 idna                                                   BSD License                                                 
 importlib-metadata                                     Apache Software License                                     
-importlib-resources                                    Apache Software License                                     
-iniconfig                                              MIT License                                                 
+importlib-resources                                    Apache Software License
+importlib_resources                                    Apache Software License                                 
+iniconfig                                              MIT License
 jmespath                                               MIT License                                                 
+joserfc                                                BSD License (BSD-3-Clause)
 jschema-to-python                                      MIT License                                                 
 jsii                                                   Apache Software License                                     
 jsondiff                                               MIT License                                                 
 jsonpatch                                              BSD License                                                 
 jsonpickle                                             BSD License                                                 
-jsonpointer                                            BSD License                                                 
+jsonpointer                                            BSD License
+jsonpath-ng                                            Apache Software License                                               
 jsonschema                                             MIT License                                                 
+jsonschema-path                                        Apache Software License
 jsonschema-spec                                        Apache Software License                                     
 jsonschema-specifications                              MIT License                                                 
 junit-xml                                              Freely Distributable; MIT License                           
 lazy-object-proxy                                      BSD License                                                 
 moto                                                   Apache Software License                                     
 mpmath                                                 BSD License                                                 
+multipart                                              Apache Software License
 multiprocess                                           BSD License                                                 
 networkx                                               BSD License                                                 
 numpy                                                  BSD License                                                 
@@ -75,14 +82,18 @@ pathos                                                 BSD License
 pbr                                                    Apache Software License                                     
 platformdirs                                           MIT License                                                 
 pluggy                                                 MIT License                                                 
+ply                                                    BSD License
 pox                                                    BSD License                                                 
 ppft                                                   BSD License                                                 
 protobuf                                               BSD-3-Clause                                                
 protobuf3-to-dict                                      Public Domain                                               
+psutil                                                 BSD-3-Clause
 publication                                            MIT License                                                 
+py-partiql-parser                                      MIT License
 pyasn1                                                 BSD License                                                 
 pycparser                                              BSD License                                                 
-pydantic                                               MIT License                                                 
+pydantic                                               MIT License
+pydantic_core                                          MIT License                                                 
 pyparsing                                              MIT License                                                 
 pytest                                                 MIT License                                                 
 pytest-cov                                             MIT License                                                 
@@ -106,6 +117,7 @@ sshpubkeys                                             BSD License
 sympy                                                  BSD License                                                 
 tblib                                                  BSD License                                                 
 tomli                                                  MIT License                                                 
+tqdm                                                   MIT License
 typeguard                                              MIT License                                                 
 types-PyYAML                                           Apache Software License                                     
 typing_extensions                                      Python Software Foundation License                          

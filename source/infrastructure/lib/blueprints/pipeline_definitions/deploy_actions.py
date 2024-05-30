@@ -148,6 +148,7 @@ def batch_transform(
         code=lambda_.Code.from_bucket(
             blueprint_bucket, "blueprints/lambdas/batch_transform.zip"
         ),
+        memory_size=512,
         environment={
             "model_name": model_name,
             "inference_instance": inference_instance,
@@ -160,7 +161,7 @@ def batch_transform(
     )
 
     batch_transform_lambda.node.default_child.cfn_options.metadata = (
-        suppress_lambda_policies()
+        { "cfn_nag": suppress_lambda_policies() }
     )
 
     return batch_transform_lambda
@@ -301,7 +302,7 @@ def create_baseline_job_lambda(
     # add suppression
     sagemaker_role.node.find_child(
         "DefaultPolicy"
-    ).node.default_child.cfn_options.metadata = suppress_pipeline_policy()
+    ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_policy() }
 
     lambda_role.add_to_policy(
         iam.PolicyStatement(
@@ -363,16 +364,17 @@ def create_baseline_job_lambda(
         layers=[sm_layer],
         environment=lambda_environment_variables,
         timeout=Duration.minutes(10),
+        memory_size=512
     )
 
     create_baseline_job_lambda.node.default_child.cfn_options.metadata = (
-        suppress_lambda_policies()
+        { "cfn_nag": suppress_lambda_policies() }
     )
 
     # add suppression
     create_baseline_job_lambda.role.node.find_child(
         "DefaultPolicy"
-    ).node.default_child.cfn_options.metadata = suppress_pipeline_policy()
+    ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_policy() }
     return create_baseline_job_lambda
 
 
@@ -455,6 +457,7 @@ def create_stackset_action(
             blueprint_bucket, "blueprints/lambdas/create_update_cf_stackset.zip"
         ),
         timeout=Duration.minutes(15),
+        memory_size=512,
         # setup the CallAS for CF StackSet
         environment={
             "CALL_AS": Fn.condition_if(
@@ -464,13 +467,13 @@ def create_stackset_action(
     )
 
     create_update_cf_stackset_lambda.node.default_child.cfn_options.metadata = (
-        suppress_lambda_policies()
+        { "cfn_nag": suppress_lambda_policies() }
     )
 
     # add suppression
     create_update_cf_stackset_lambda.role.node.find_child(
         "DefaultPolicy"
-    ).node.default_child.cfn_options.metadata = suppress_pipeline_policy()
+    ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_policy() }
 
     # Create codepipeline action
     create_stackset_action = codepipeline_actions.LambdaInvokeAction(
@@ -560,6 +563,7 @@ def create_invoke_lambda_custom_resource(
         handler="index.handler",
         runtime=lambda_.Runtime.PYTHON_3_10,
         timeout=Duration.minutes(5),
+        memory_size=512,
     )
 
     custom_resource_lambda_fn.add_to_role_policy(
@@ -571,7 +575,7 @@ def create_invoke_lambda_custom_resource(
         )
     )
     custom_resource_lambda_fn.node.default_child.cfn_options.metadata = (
-        suppress_lambda_policies()
+        { "cfn_nag": suppress_lambda_policies() }
     )
 
     invoke_lambda_custom_resource = CustomResource(
@@ -611,7 +615,7 @@ def create_copy_assets_lambda(scope, blueprint_repository_bucket_name):
         code=lambda_.Code.from_asset("../lambdas/custom_resource"),
         handler="index.on_event",
         runtime=lambda_.Runtime.PYTHON_3_10,
-        memory_size=256,
+        memory_size=512,
         environment={
             "SOURCE_BUCKET": source_bucket,
             "FILE_KEY": file_key,
@@ -622,7 +626,7 @@ def create_copy_assets_lambda(scope, blueprint_repository_bucket_name):
     )
 
     custom_resource_lambda_fn.node.default_child.cfn_options.metadata = (
-        suppress_lambda_policies()
+        { "cfn_nag": suppress_lambda_policies() }
     )
     # grant permission to download the file from the source bucket
     custom_resource_lambda_fn.add_to_role_policy(
@@ -652,9 +656,10 @@ def create_solution_helper(scope):
         handler="lambda_function.handler",
         runtime=lambda_.Runtime.PYTHON_3_10,
         timeout=Duration.minutes(5),
+        memory_size=512
     )
 
-    helper_function.node.default_child.cfn_options.metadata = suppress_lambda_policies()
+    helper_function.node.default_child.cfn_options.metadata = { "cfn_nag": suppress_lambda_policies() }
 
     return helper_function
 
@@ -837,10 +842,11 @@ def autopilot_training_job(
             "LOG_LEVEL": "INFO",
         },
         timeout=Duration.minutes(10),
+        memory_size=512,
     )
 
     autopilot_lambda.node.default_child.cfn_options.metadata = (
-        suppress_lambda_policies()
+        { "cfn_nag": suppress_lambda_policies() }
     )
 
     return autopilot_lambda
@@ -985,9 +991,10 @@ def model_training_job(
             "LOG_LEVEL": "INFO",
         },
         timeout=Duration.minutes(10),
+        memory_size=512,
     )
 
-    training_lambda.node.default_child.cfn_options.metadata = suppress_lambda_policies()
+    training_lambda.node.default_child.cfn_options.metadata = { "cfn_nag": suppress_lambda_policies() }
 
     return training_lambda
 

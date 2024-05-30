@@ -303,7 +303,7 @@ def sagemaker_logs_metrics_policy_document(scope, id):
             ),
         ],
     )
-    policy.node.default_child.cfn_options.metadata = suppress_cloudwatch_policy()
+    policy.node.default_child.cfn_options.metadata = { "cfn_nag": suppress_cloudwatch_policy() }
 
     return policy
 
@@ -386,7 +386,7 @@ def ecr_policy_document(scope, id, repo_arn):
         ],
     )
     # add supression for *
-    ecr_policy.node.default_child.cfn_options.metadata = suppress_ecr_policy()
+    ecr_policy.node.default_child.cfn_options.metadata = { "cfn_nag": suppress_ecr_policy() }
 
     return ecr_policy
 
@@ -518,7 +518,7 @@ def delegated_admin_policy_document(scope, id):
     )
     # add supression for *
     delegated_admin_policy.node.default_child.cfn_options.metadata = (
-        suppress_delegated_admin_policy()
+        { "cfn_nag": suppress_delegated_admin_policy() }
     )
 
     return delegated_admin_policy
@@ -709,6 +709,7 @@ def create_orchestrator_policy(
                     "s3:GetBucketPolicy",
                     "s3:PutBucketPolicy",
                     "s3:DeleteBucketPolicy",
+                    "s3:PutBucketTagging",
                 ],
                 resources=[f"arn:{Aws.PARTITION}:s3:::*"],
             ),

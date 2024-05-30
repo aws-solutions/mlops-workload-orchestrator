@@ -15,7 +15,7 @@ import boto3
 import tempfile
 import pytest
 from unittest.mock import patch
-from moto import mock_s3
+from moto import mock_aws
 
 from index import copy_assets_to_s3, on_event, custom_resource, no_op
 
@@ -37,7 +37,7 @@ def mocked_response():
     return f"CopyAssets-{os.environ['DESTINATION_BUCKET']}"
 
 
-@mock_s3
+@mock_aws
 @patch("index.os.walk")
 @patch("index.shutil.unpack_archive")
 def test_copy_assets_to_s3(mocked_shutil, mocked_walk, mocked_response):

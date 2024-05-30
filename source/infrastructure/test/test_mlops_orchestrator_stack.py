@@ -1147,6 +1147,7 @@ class TestMLOpsStacks:
                                     "s3:GetBucketPolicy",
                                     "s3:PutBucketPolicy",
                                     "s3:DeleteBucketPolicy",
+                                    "s3:PutBucketTagging",
                                 ],
                                 "Effect": "Allow",
                                 "Resource": {

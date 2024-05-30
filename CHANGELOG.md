@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2024-05-27
+
+### Updated
+
+- boto3, botocore updated to 1.34.98
+- sagemaker-python-sdk updated to 2.218.0 for CVE-2024-34073
+- moto testing framework updated to 5.0.6 to remove dependency on python-jose due to CVE
+- lambda memory sizes increased to 512
+- requests package updated to 2.32.0 due to CVE-2024-35195
+- PutBucketTagging permission added to orchestrator lambda iam policy
+
 
 ## [2.2.0] - 2023-08-03
 

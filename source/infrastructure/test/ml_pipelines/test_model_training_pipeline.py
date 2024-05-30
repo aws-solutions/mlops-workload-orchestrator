@@ -873,7 +873,7 @@ class TestModelTraining:
             template.has_output(
                 "ValidationDataLocation",
                 {
-                    "Description": "Training data used by the training job",
+                    "Description": "Validation data used by the training job",
                     "Value": {
                         "Fn::Join": [
                             "",
@@ -881,7 +881,7 @@ class TestModelTraining:
                                 "https://s3.console.aws.amazon.com/s3/buckets/",
                                 {"Ref": "AssetsBucket"},
                                 "/",
-                                {"Ref": "TrainingData"},
+                                {"Ref": "ValidationData"},
                             ],
                         ]
                     },

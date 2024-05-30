@@ -99,6 +99,7 @@ class BYOMRealtimePipelineStack(Stack):
                     blueprint_bucket, "blueprints/lambdas/inference.zip"
                 ),
                 "timeout": Duration.minutes(5),
+                "memory_size": 512
             },
             api_gateway_props={
                 "defaultMethodOptions": {
@@ -110,7 +111,7 @@ class BYOMRealtimePipelineStack(Stack):
         )
         # add suppressions
         inference_api_gateway.lambda_function.node.default_child.cfn_options.metadata = (
-            suppress_lambda_policies()
+            { "cfn_nag": suppress_lambda_policies() }
         )
         provision_resource = inference_api_gateway.api_gateway.root.add_resource(
             "inference"
