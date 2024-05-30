@@ -13,7 +13,7 @@
 import os
 from unittest.mock import MagicMock, patch
 import pytest
-from moto import mock_sts
+from moto import mock_aws
 import botocore.session
 from botocore.stub import Stubber, ANY
 from main import handler
@@ -72,7 +72,7 @@ def event():
     }
 
 
-@mock_sts
+@mock_aws
 def test_handler_success(sm_expected_params, sm_response_200, event):
     sm_client = get_client("sagemaker")
     sm_stubber = Stubber(sm_client)
@@ -85,7 +85,6 @@ def test_handler_success(sm_expected_params, sm_response_200, event):
         reset_client()
 
 
-@mock_sts
 def test_handler_fail(sm_expected_params, sm_response_500, event):
     sm_client = get_client("sagemaker")
     sm_stubber = Stubber(sm_client)

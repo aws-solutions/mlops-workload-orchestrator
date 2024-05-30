@@ -34,7 +34,7 @@ from tests.fixtures.stackset_fixtures import (
     mocked_invalid_user_parms,
     mocked_describe_response
 )
-from moto import mock_cloudformation, mock_s3
+from moto import mock_aws
 from unittest.mock import patch
 from stackset_helpers import (
     find_artifact,
@@ -58,7 +58,7 @@ cp_job = "CodePipeline.job"
 client_to_patch = "boto3.client"
 
 
-@mock_cloudformation
+@mock_aws
 def test_create_stackset_and_instances(
     stackset_name,
     mocked_template,
@@ -149,7 +149,7 @@ def test_get_stackset_instance_status(
 
 
 
-@mock_cloudformation
+@mock_aws
 def test_update_stackset(
     stackset_name,
     mocked_template,
@@ -203,7 +203,7 @@ def test_update_stackset_error(
         )
 
 
-@mock_cloudformation
+@mock_aws
 def test_stackset_exists(stackset_name, mocked_template, mocked_template_parameters, mocked_regions):
     cf_client = boto3.client("cloudformation", region_name=mocked_regions[0])
     # assert the stackset does not exist
@@ -504,14 +504,14 @@ def test_lambda_handler(
     mocked_put_job_failure.assert_called()
 
 
-@mock_s3
+@mock_aws
 def test_setup_s3_client(mocked_codepipeline_event):
     job_data = mocked_codepipeline_event[cp_job]["data"]
     s3_clinet = setup_s3_client(job_data)
     assert s3_clinet is not None
 
 
-@mock_s3
+@mock_aws
 @patch("zipfile.ZipFile")
 def test_get_template(mocked_zipfile, mocked_codepipeline_event, mocked_regions):
     job_data = mocked_codepipeline_event[cp_job]["data"]

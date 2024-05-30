@@ -72,7 +72,7 @@ run_python_test() {
 	# Use -vv for debugging
 	python3 -m pytest --cov --cov-fail-under=80 --cov-report=term-missing --cov-report "xml:$coverage_report_path"
 	if [ "$?" = "1" ]; then
-		echo "(source/run-all-tests.sh) ERROR: there is likely output above." 1>&2
+		echo "(deployment/run-unit-tests.sh) ERROR: there is likely output above." 1>&2
 		exit 1
 	fi
 	sed -i -e "s,<source>$source_dir,<source>source,g" $coverage_report_path
@@ -89,7 +89,7 @@ run_javascript_lambda_test() {
 	npm ci
 	npm test
 	if [ "$?" = "1" ]; then
-		echo "(source/run-all-tests.sh) ERROR: there is likely output above." 1>&2
+		echo "(deployment/run-unit-tests.sh) ERROR: there is likely output above." 1>&2
 		exit 1
 	fi
 	[ "${CLEAN:-true}" = "true" ] && rm -fr coverage
@@ -154,8 +154,9 @@ run_blueprint_lambda_test() {
 }
 
 # Save the current working directory and set source directory
+starting_dir=$PWD
+cd ../source
 source_dir=$PWD
-cd $source_dir
 
 # setup coverage report directory
 coverage_dir=$source_dir/test/coverage-reports
@@ -164,9 +165,9 @@ mkdir -p $coverage_dir
 # Clean the test environment before running tests and after finished running tests
 # The variable is option with default of 'true'. It can be overwritten by caller
 # setting the CLEAN environment variable. For example
-#    $ CLEAN=true ./run-all-tests.sh
+#    $ CLEAN=true ./run-unit-tests.sh
 # or
-#    $ CLEAN=false ./run-all-tests.sh
+#    $ CLEAN=false ./run-unit-tests.sh
 #
 CLEAN="${CLEAN:-true}"
 
@@ -180,5 +181,5 @@ run_cdk_project_test
 deactivate
 
 
-# Return to the source/ level where we started
-cd $source_dir
+# Return to the folder where where we started
+cd $starting_dir

@@ -114,12 +114,12 @@ class BYOMCustomAlgorithmImageBuilderStack(Stack):
         # add ArtifactBucket cfn supression (not needing a logging bucket)
         image_builder_pipeline.node.find_child(
             "ArtifactsBucket"
-        ).node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_bucket() }
 
         # add supression for complex policy
         image_builder_pipeline.node.find_child("Role").node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_iam_complex()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_iam_complex() }
 
         # attaching iam permissions to the pipelines
         pipeline_permissions(image_builder_pipeline, assets_bucket)

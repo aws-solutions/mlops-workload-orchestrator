@@ -55,7 +55,7 @@ def build_action(scope, ecr_repository_name, image_tag, source_output):
     # add suppression
     codebuild_role.node.find_child(
         "DefaultPolicy"
-    ).node.default_child.cfn_options.metadata = suppress_pipeline_policy()
+    ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_policy() }
     # codebuild setup for build stage
     container_factory_project = codebuild.PipelineProject(
         scope,

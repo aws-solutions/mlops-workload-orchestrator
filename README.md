@@ -60,7 +60,7 @@ Upon successfully cloning the repository into your local development environment
 ├── README.md
 ├── deployment                [folder containing build/test scripts]
 │   ├── build-s3-dist.sh
-│   ├── run-all-tests.sh
+│   ├── run-unit-tests.sh
 │   ├── cdk-solution-helper
 └── source
     ├── infrastructure        [folder containing CDK code and lambdas for ML pipelines]
@@ -100,7 +100,7 @@ Upon successfully cloning the repository into your local development environment
 
 Clone this git repository.
 
-`git clone https://github.com/awslabs/<repository_name>`
+`git clone https://github.com/aws-solutions/mlops-workload-orchestrator.git`
 
 ---
 
@@ -109,12 +109,17 @@ Clone this git repository.
 - To run the unit tests
 
 ```
-cd <rootDir>/source
-chmod +x ./run-all-tests.sh
-./run-all-tests.sh
+cd <rootDir>/deployment
+chmod +x ./run-unit-tests.sh
+./run-unit-tests.sh
 ```
 
-- Configure the bucket name of your target Amazon S3 distribution bucket
+- Determine the name of a target Amazon S3 distribution bucket that should be created in your account, the name should be suffixed with the region that the deployment will be made in, example my-solution-name-<region> such as my-solution-name-us-east-1
+- Create the bucket in the target account
+- Set environment variables in your shell as follows, note that *DIST_OUTPUT_BUCKET* should not include the region suffix of the bucket name, that will be automatically appended later
+- SOLUTION_NAME - The name of This solution (example: mlops-workload-orchestrator)
+- VERSION - The version number of the change
+
 
 ```
 export DIST_OUTPUT_BUCKET=my-bucket-name
@@ -133,19 +138,17 @@ chmod +x ./build-s3-dist.sh
 - Upload the distributable assets to your Amazon S3 bucket in your account. Note: ensure that you own the Amazon S3 bucket before uploading the assets. To upload the assets to the S3 bucket, you can use the AWS Console or the AWS CLI as shown below.
 
 ```
-aws s3 cp ./global-s3-assets/ s3://my-bucket-name-<aws_region>/mlops-workload-orchestrator/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
-aws s3 cp ./regional-s3-assets/ s3://my-bucket-name-<aws_region>/mlops-workload-orchestrator/<my-version>/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
+aws s3 cp ./global-s3-assets/ s3://$DIST_OUTPUT_BUCKET-<aws_region>/$SOLUTION_NAME/$VERSION/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
+aws s3 cp ./regional-s3-assets/ s3://$DIST_OUTPUT_BUCKET-<aws_region>/$SOLUTION_NAME/$VERSION/ --recursive --acl bucket-owner-full-control --profile aws-cred-profile-name
 ```
+
+- In the destination bucket under the solution name and version folders, there should be templates for single and multi-region deployments. These will end with a *.template* suffix.
+- Copy the *Object URL* link for the preferred deployment architecture.
+- Create the deployment using CloudFormation with the template link.
 
 ---
 
-- Parameter details
 
-```
-$DIST_OUTPUT_BUCKET - This is the global name of the distribution. For the bucket name, the AWS Region is added to the global name (example: 'my-bucket-name-us-east-1') to create a regional bucket. The lambda artifact should be uploaded to the regional buckets for the CloudFormation template to pick it up for deployment.
-$SOLUTION_NAME - The name of This solution (example: mlops-workload-orchestrator)
-$VERSION - The version number of the change
-```
 
 ## Uninstall the solution
 

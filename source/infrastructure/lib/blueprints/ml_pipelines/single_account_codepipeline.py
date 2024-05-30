@@ -96,7 +96,7 @@ class SingleAccountCodePipelineStack(Stack):
         # Add CF suppressions to the action
         cloudformation_action.deployment_role.node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_cloudformation_action()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_cloudformation_action() }
 
         # add notification to the single-account pipeline
         single_account_pipeline.on_state_change(
@@ -127,12 +127,12 @@ class SingleAccountCodePipelineStack(Stack):
         # add ArtifactBucket cfn supression (not needing a logging bucket)
         single_account_pipeline.node.find_child(
             "ArtifactsBucket"
-        ).node.default_child.cfn_options.metadata = suppress_pipeline_bucket()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_pipeline_bucket() }
 
         # add supression for complex policy
         single_account_pipeline.node.find_child("Role").node.find_child(
             "DefaultPolicy"
-        ).node.default_child.cfn_options.metadata = suppress_iam_complex()
+        ).node.default_child.cfn_options.metadata = { "cfn_nag": suppress_iam_complex() }
 
         # attaching iam permissions to the pipelines
         pipeline_permissions(single_account_pipeline, assets_bucket)

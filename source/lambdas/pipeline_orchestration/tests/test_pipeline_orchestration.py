@@ -21,7 +21,11 @@ from unittest import TestCase
 import botocore.session
 from botocore.exceptions import ClientError
 from botocore.stub import Stubber
-from moto import mock_s3
+import moto.s3.models as s3model
+from moto.s3.models import s3_backends
+from moto.s3.responses import DEFAULT_REGION_NAME
+
+from moto import mock_aws
 from pipeline_orchestration.lambda_helpers import (
     clean_param,
     get_stack_name,
@@ -243,7 +247,7 @@ def test_provision_pipeline(api_image_builder_event, api_byom_event):
     stubber.add_response("create_stack", {"StackId": "1234"})
     stubber.add_response("create_stack", {"StackId": "1234"})
     with stubber:
-        with mock_s3():
+        with mock_aws():
             event = api_image_builder_event
             response = provision_pipeline(event, client)
             assert response == expected_response
@@ -262,23 +266,29 @@ def test_provision_pipeline(api_image_builder_event, api_byom_event):
             assert response == expected_response
 
 
-@mock_s3
+@mock_aws
 def test_upload_file_to_s3():
     s3_client = boto3.client("s3", region_name="us-east-1")
-    testfile = tempfile.NamedTemporaryFile()
-    s3_client.create_bucket(Bucket="assetsbucket")
-    upload_file_to_s3(testfile.name, "assetsbucket", os.environ["TESTFILE"], s3_client)
+    try:
+        testfile = tempfile.NamedTemporaryFile()
+        s3_client.create_bucket(Bucket="assetsbucket")
+        upload_file_to_s3(testfile.name, "assetsbucket", os.environ["TESTFILE"], s3_client)
+    finally:
+        testfile.close()
 
 
-@mock_s3
+@mock_aws
 def test_download_file_from_s3():
     s3_client = boto3.client("s3", region_name="us-east-1")
-    testfile = tempfile.NamedTemporaryFile()
-    s3_client.create_bucket(Bucket="assetsbucket")
-    upload_file_to_s3(testfile.name, "assetsbucket", os.environ["TESTFILE"], s3_client)
-    download_file_from_s3(
-        "assetsbucket", os.environ["TESTFILE"], testfile.name, s3_client
-    )
+    try:
+        testfile = tempfile.NamedTemporaryFile()
+        s3_client.create_bucket(Bucket="assetsbucket")
+        upload_file_to_s3(testfile.name, "assetsbucket", os.environ["TESTFILE"], s3_client)
+        download_file_from_s3(
+            "assetsbucket", os.environ["TESTFILE"], testfile.name, s3_client
+        )
+    finally:
+        testfile.close()
 
 
 def test_create_codepipeline_stack(
