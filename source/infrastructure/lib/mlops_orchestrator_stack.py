@@ -144,7 +144,7 @@ class MLOpsStack(Stack):
         # This is a logging bucket.
         access_logs_bucket.node.default_child.cfn_options.metadata = {
             "cfn_nag": suppress_s3_access_policy(),
-            "guard": suppress_cfnguard_rules(['S3_BUCKET_NO_PUBLIC_RW_ACL']),
+            "guard": suppress_cfnguard_rules(["S3_BUCKET_NO_PUBLIC_RW_ACL"]),
         }
 
         # Import user provide S3 bucket, if any. s3.Bucket.from_bucket_arn is used instead of
@@ -182,8 +182,8 @@ class MLOpsStack(Stack):
 
         # add cfn-guard suppressions
         assets_bucket.node.default_child.cfn_options.metadata = {
-            "guard": suppress_cfnguard_rules(['S3_BUCKET_NO_PUBLIC_RW_ACL']),
-        }  
+            "guard": suppress_cfnguard_rules(["S3_BUCKET_NO_PUBLIC_RW_ACL"]),
+        }
 
         # Create the resource if create_new_bucket condition is True
         Aspects.of(assets_bucket).add(ConditionalResources(create_new_bucket))
@@ -209,8 +209,8 @@ class MLOpsStack(Stack):
 
         # add cfn-guard suppressions
         blueprint_repository_bucket.node.default_child.cfn_options.metadata = {
-            "guard": suppress_cfnguard_rules(['S3_BUCKET_NO_PUBLIC_RW_ACL']),
-        }  
+            "guard": suppress_cfnguard_rules(["S3_BUCKET_NO_PUBLIC_RW_ACL"]),
+        }
 
         # add override for access logs bucket
         access_logs_bucket.add_to_resource_policy(
@@ -260,9 +260,9 @@ class MLOpsStack(Stack):
                 "MLOpsNotificationsTopic",
             )
         )
-        mlops_notifications_topic.node.default_child.cfn_options.metadata = (
-            { "cfn_nag": suppress_sns() }
-        )
+        mlops_notifications_topic.node.default_child.cfn_options.metadata = {
+            "cfn_nag": suppress_sns()
+        }
 
         mlops_notifications_topic.add_subscription(
             subscriptions.EmailSubscription(
@@ -316,6 +316,9 @@ class MLOpsStack(Stack):
             self,
             "CustomResourceCopyAssets",
             service_token=custom_resource_lambda_fn.function_arn,
+            properties={
+                "blueprint_bucket": blueprint_repository_bucket.bucket_name,
+            },
         )
         custom_resource.node.add_dependency(blueprint_repository_bucket)
         # IAM policies setup ###
@@ -354,7 +357,7 @@ class MLOpsStack(Stack):
                 "code": lambda_.Code.from_asset("../lambdas/pipeline_orchestration"),
                 "layers": [sm_layer],
                 "timeout": Duration.minutes(10),
-                "memory_size": 512
+                "memory_size": 512,
             },
             api_gateway_props={
                 "defaultMethodOptions": {
@@ -367,19 +370,19 @@ class MLOpsStack(Stack):
         )
 
         # add lambda suppressions
-        provisioner_apigw_lambda.lambda_function.node.default_child.cfn_options.metadata = (
-            { "cfn_nag": suppress_lambda_policies() }
-        )
+        provisioner_apigw_lambda.lambda_function.node.default_child.cfn_options.metadata = {
+            "cfn_nag": suppress_lambda_policies()
+        }
 
         # add API Gateway suppressions
-        provisioner_apigw_lambda.api_gateway.deployment_stage.node.default_child.cfn_options.metadata = (
-            { "guard": suppress_cfnguard_rules(["API_GW_CACHE_ENABLED_AND_ENCRYPTED"]) }
-        )
+        provisioner_apigw_lambda.api_gateway.deployment_stage.node.default_child.cfn_options.metadata = {
+            "guard": suppress_cfnguard_rules(["API_GW_CACHE_ENABLED_AND_ENCRYPTED"])
+        }
 
         # add CW role suppression
-        provisioner_apigw_lambda.api_gateway_cloud_watch_role.node.default_child.cfn_options.metadata = (
-            { "guard": suppress_cfnguard_rules(["IAM_NO_INLINE_POLICY_CHECK"]) }
-        )
+        provisioner_apigw_lambda.api_gateway_cloud_watch_role.node.default_child.cfn_options.metadata = {
+            "guard": suppress_cfnguard_rules(["IAM_NO_INLINE_POLICY_CHECK"])
+        }
 
         provision_resource = provisioner_apigw_lambda.api_gateway.root.add_resource(
             "provisionpipeline"
@@ -400,9 +403,9 @@ class MLOpsStack(Stack):
         )
 
         # add role suppressions
-        provisioner_apigw_lambda.lambda_function.role.node.default_child.cfn_options.metadata = (
-            { "guard": suppress_cfnguard_rules(['IAM_NO_INLINE_POLICY_CHECK']) }
-        )
+        provisioner_apigw_lambda.lambda_function.role.node.default_child.cfn_options.metadata = {
+            "guard": suppress_cfnguard_rules(["IAM_NO_INLINE_POLICY_CHECK"])
+        }
 
         # Environment variables setup
         provisioner_apigw_lambda.lambda_function.add_environment(
@@ -555,7 +558,7 @@ class MLOpsStack(Stack):
                     },
                 ]
             },
-            "guard": suppress_cfnguard_rules(['S3_BUCKET_NO_PUBLIC_RW_ACL'])
+            "guard": suppress_cfnguard_rules(["S3_BUCKET_NO_PUBLIC_RW_ACL"]),
         }
 
         # custom resource for operational metrics###
