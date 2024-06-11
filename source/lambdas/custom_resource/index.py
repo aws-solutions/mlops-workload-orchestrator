@@ -69,6 +69,7 @@ def on_event(event, context):
 
 
 @helper.create
+@helper.update
 def custom_resource(event, _):
 
     try:
@@ -81,7 +82,6 @@ def custom_resource(event, _):
         raise e
 
 
-@helper.update
 @helper.delete
 def no_op(_, __):
     pass  # No action is required when stack is deleted
