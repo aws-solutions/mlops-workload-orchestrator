@@ -58,6 +58,7 @@ Upon successfully cloning the repository into your local development environment
 ├── LICENSE.txt
 ├── NOTICE.txt
 ├── README.md
+├── SECURITY.md
 ├── deployment                [folder containing build/test scripts]
 │   ├── build-s3-dist.sh
 │   ├── run-unit-tests.sh
