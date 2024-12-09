@@ -51,3 +51,10 @@ temp/
 
 ### VisualStudioCode Path ###
 .vscode
+
+
+# Python Virtual env
+.venv
+
+source/infrastructure/lib/blueprints/lambdas/sagemaker_layer/python/**
+**crhelper**

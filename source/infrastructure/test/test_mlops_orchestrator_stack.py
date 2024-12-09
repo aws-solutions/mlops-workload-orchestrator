@@ -62,26 +62,12 @@ class TestMLOpsStacks:
         # Template parameters shared across single and multi account
         for template in self.templates:
             template.has_parameter(
-                "NotificationEmail",
+                "ConfigS3Bucket",
                 {
                     "Type": "String",
-                    "AllowedPattern": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$",
-                    "ConstraintDescription": "Please enter an email address with correct format (example@example.com)",
-                    "Description": "email for pipeline outcome notifications",
-                    "MaxLength": 320,
-                    "MinLength": 5,
-                },
-            )
-
-            template.has_parameter(
-                "CodeCommitRepoAddress",
-                {
-                    "Type": "String",
-                    "AllowedPattern": "^(((https:\\/\\/|ssh:\\/\\/)(git\\-codecommit)\\.[a-zA-Z0-9_.+-]+(amazonaws\\.com\\/)[a-zA-Z0-9-.]+(\\/)[a-zA-Z0-9-.]+(\\/)[a-zA-Z0-9-.]+$)|^$)",
-                    "ConstraintDescription": "CodeCommit address must follow the pattern: ssh or https://git-codecommit.REGION.amazonaws.com/version/repos/REPONAME",
-                    "Description": "AWS CodeCommit repository clone URL to connect to the framework.",
-                    "MaxLength": 320,
-                    "MinLength": 0,
+                    "AllowedPattern": "((?=^.{3,63}$)(?!^(\\d+\\.)+\\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])\\.)*([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$)|^$)",
+                    "Description": "Specify the name of an existing S3 bucket where the mlops-config.json file will be uploaded to provision the pipeline. Note: The S3 bucket must be in the same AWS region as the stack being deployed.",
+                    "MinLength": 0
                 },
             )
 
@@ -207,8 +193,8 @@ class TestMLOpsStacks:
         # single and multi account templates should have the same conditions
         for template in self.templates:
             template.has_condition(
-                "GitAddressProvided",
-                {"Fn::Not": [{"Fn::Equals": [{"Ref": "CodeCommitRepoAddress"}, ""]}]},
+                "ConfigBucketProvided",
+                {"Fn::Not": [{"Fn::Equals": [{"Ref": "ConfigS3Bucket"}, ""]}]},
             )
 
             template.has_condition(
@@ -253,7 +239,7 @@ class TestMLOpsStacks:
     def test_all_s3_buckets_properties(self):
         """Tests for S3 buckets properties"""
         for template in self.templates:
-            template.resource_count_is("AWS::S3::Bucket", 4)
+            template.resource_count_is("AWS::S3::Bucket", 3)
             # assert for all bucket, encryption is enabled and Public Access is Blocked
             template.all_resources_properties(
                 "AWS::S3::Bucket",
@@ -309,7 +295,7 @@ class TestMLOpsStacks:
         """Tests for S3 buckets policies"""
         for template in self.templates:
             # we have 4 S3 buckets, so we should have 4 bucket policies
-            template.resource_count_is("AWS::S3::BucketPolicy", 4)
+            template.resource_count_is("AWS::S3::BucketPolicy", 3)
             # assert all buckets have bucket policy to enforce SecureTransport
             template.all_resources_properties(
                 "AWS::S3::BucketPolicy",
@@ -328,7 +314,7 @@ class TestMLOpsStacks:
                                         {
                                             "Fn::GetAtt": [
                                                 Match.string_like_regexp(
-                                                    "(accessLogs*|blueprintrepository*|pipelineassets*|MLOpsCodeCommitPipelineArtifactsBucket)"
+                                                    "(accessLogs*|blueprintrepository*|pipelineassets*)"
                                                 ),
                                                 "Arn",
                                             ]
@@ -340,7 +326,7 @@ class TestMLOpsStacks:
                                                     {
                                                         "Fn::GetAtt": [
                                                             Match.string_like_regexp(
-                                                                "(accessLogs*|blueprintrepository*|pipelineassets*|MLOpsCodeCommitPipelineArtifactsBucket)"
+                                                                "(accessLogs*|blueprintrepository*|pipelineassets*)"
                                                             ),
                                                             "Arn",
                                                         ]
@@ -650,7 +636,7 @@ class TestMLOpsStacks:
                     "Resource": "AnonymizedMetric",
                     "UUID": {"Fn::GetAtt": ["CreateUniqueID", "UUID"]},
                     "bucketSelected": {"Fn::If": ["S3BucketProvided", "True", "False"]},
-                    "gitSelected": {"Fn::If": ["GitAddressProvided", "True", "False"]},
+                    "configBucketProvided": {"Fn::If": ["ConfigBucketProvided", "True", "False"]},
                     "Region": {"Ref": "AWS::Region"},
                     "IsMultiAccount": Match.string_like_regexp(
                         "(False|True)"
@@ -1501,245 +1487,6 @@ class TestMLOpsStacks:
                     "PathPart": Match.string_like_regexp(
                         "(pipelinestatus|provisionpipeline)"
                     ),
-                },
-            )
-
-    def test_events_rule(self):
-        """Tests for events Rule"""
-        for template in self.templates:
-            template.has_resource_properties(
-                "AWS::Events::Rule",
-                {
-                    "EventPattern": {
-                        "source": ["aws.codecommit"],
-                        "resources": [
-                            {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        "arn:",
-                                        {"Ref": "AWS::Partition"},
-                                        ":codecommit:",
-                                        {"Ref": "AWS::Region"},
-                                        ":",
-                                        {"Ref": "AWS::AccountId"},
-                                        ":",
-                                        {
-                                            "Fn::Select": [
-                                                5,
-                                                {
-                                                    "Fn::Split": [
-                                                        "/",
-                                                        {
-                                                            "Ref": "CodeCommitRepoAddress"
-                                                        },
-                                                    ]
-                                                },
-                                            ]
-                                        },
-                                    ],
-                                ]
-                            }
-                        ],
-                        "detail-type": ["CodeCommit Repository State Change"],
-                        "detail": {
-                            "event": ["referenceCreated", "referenceUpdated"],
-                            "referenceName": ["main"],
-                        },
-                    },
-                    "State": "ENABLED",
-                    "Targets": [
-                        {
-                            "Arn": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        "arn:",
-                                        {"Ref": "AWS::Partition"},
-                                        ":codepipeline:",
-                                        {"Ref": "AWS::Region"},
-                                        ":",
-                                        {"Ref": "AWS::AccountId"},
-                                        ":",
-                                        {
-                                            "Ref": Match.string_like_regexp(
-                                                "MLOpsCodeCommitPipeline*"
-                                            )
-                                        },
-                                    ],
-                                ]
-                            },
-                            "Id": "Target0",
-                            "RoleArn": {
-                                "Fn::GetAtt": [
-                                    Match.string_like_regexp(
-                                        "MLOpsCodeCommitPipelineEventsRole*"
-                                    ),
-                                    "Arn",
-                                ]
-                            },
-                        }
-                    ],
-                },
-            )
-
-    def test_codebuild(self):
-        """Tests for Codebuild"""
-        for template in self.templates:
-            template.has_resource_properties(
-                "AWS::CodeBuild::Project",
-                {
-                    "Artifacts": {"Type": "CODEPIPELINE"},
-                    "Environment": Match.object_equals(
-                        {
-                            "ComputeType": "BUILD_GENERAL1_SMALL",
-                            "Image": "aws/codebuild/standard:1.0",
-                            "ImagePullCredentialsType": "CODEBUILD",
-                            "PrivilegedMode": False,
-                            "Type": "LINUX_CONTAINER",
-                        }
-                    ),
-                    "ServiceRole": {
-                        "Fn::GetAtt": ["TakeconfigfileRoleD1BE5721", "Arn"]
-                    },
-                    "Source": {
-                        "BuildSpec": {
-                            "Fn::Join": [
-                                "",
-                                [
-                                    '{\n  "version": "0.2",\n  "phases": {\n    "build": {\n      "commands": [\n        "ls -a",\n        "aws lambda invoke --function-name ',
-                                    {
-                                        "Ref": "PipelineOrchestrationLambdaFunction7EE5E931"
-                                    },
-                                    ' --payload fileb://mlops-config.json response.json --invocation-type RequestResponse"\n      ]\n    }\n  }\n}',
-                                ],
-                            ]
-                        },
-                        "Type": "CODEPIPELINE",
-                    },
-                    "Cache": {"Type": "NO_CACHE"},
-                    "EncryptionKey": "alias/aws/s3",
-                },
-            )
-
-    def test_codepipeline(self):
-        """Tests for CodePipeline"""
-        for template in self.templates:
-            # assert there is one codepipeline
-            template.resource_count_is("AWS::CodePipeline::Pipeline", 1)
-
-            # assert properties
-            template.has_resource_properties(
-                "AWS::CodePipeline::Pipeline",
-                {
-                    "RoleArn": {
-                        "Fn::GetAtt": [
-                            Match.string_like_regexp("MLOpsCodeCommitPipelineRole*"),
-                            "Arn",
-                        ]
-                    },
-                    "Stages": [
-                        {
-                            "Actions": [
-                                {
-                                    "ActionTypeId": {
-                                        "Category": "Source",
-                                        "Owner": "AWS",
-                                        "Provider": "CodeCommit",
-                                        "Version": "1",
-                                    },
-                                    "Configuration": Match.object_equals(
-                                        {
-                                            "RepositoryName": {
-                                                "Fn::Select": [
-                                                    5,
-                                                    {
-                                                        "Fn::Split": [
-                                                            "/",
-                                                            {
-                                                                "Ref": "CodeCommitRepoAddress"
-                                                            },
-                                                        ]
-                                                    },
-                                                ]
-                                            },
-                                            "BranchName": "main",
-                                            "PollForSourceChanges": False,
-                                        }
-                                    ),
-                                    "Name": "CodeCommit",
-                                    "OutputArtifacts": [
-                                        {"Name": "Artifact_Source_CodeCommit"}
-                                    ],
-                                    "RoleArn": {
-                                        "Fn::GetAtt": [
-                                            Match.string_like_regexp(
-                                                "MLOpsCodeCommitPipelineSourceCodeCommitCodePipelineActionRole*"
-                                            ),
-                                            "Arn",
-                                        ]
-                                    },
-                                    "RunOrder": 1,
-                                }
-                            ],
-                            "Name": "Source",
-                        },
-                        {
-                            "Actions": [
-                                {
-                                    "ActionTypeId": {
-                                        "Category": "Build",
-                                        "Owner": "AWS",
-                                        "Provider": "CodeBuild",
-                                        "Version": "1",
-                                    },
-                                    "Configuration": {
-                                        "ProjectName": {
-                                            "Ref": Match.string_like_regexp(
-                                                "Takeconfigfile*"
-                                            )
-                                        }
-                                    },
-                                    "InputArtifacts": [
-                                        {"Name": "Artifact_Source_CodeCommit"}
-                                    ],
-                                    "Name": "provision_pipeline",
-                                    "RoleArn": {
-                                        "Fn::GetAtt": [
-                                            Match.string_like_regexp(
-                                                "MLOpsCodeCommitPipelineTakeConfigprovisionpipelineCodePipelineActionRole*"
-                                            ),
-                                            "Arn",
-                                        ]
-                                    },
-                                    "RunOrder": 1,
-                                }
-                            ],
-                            "Name": "TakeConfig",
-                        },
-                    ],
-                    "ArtifactStore": {
-                        "Location": {
-                            "Ref": Match.string_like_regexp(
-                                "MLOpsCodeCommitPipelineArtifactsBucket*"
-                            )
-                        },
-                        "Type": "S3",
-                    },
-                },
-            )
-
-            # assert codepipeline dependencies and condition
-            template.has_resource(
-                "AWS::CodePipeline::Pipeline",
-                {
-                    "DependsOn": [
-                        Match.string_like_regexp(
-                            "MLOpsCodeCommitPipelineRoleDefaultPolicy*"
-                        ),
-                        Match.string_like_regexp("MLOpsCodeCommitPipelineRole*"),
-                    ],
-                    "Condition": "GitAddressProvided",
                 },
             )
 

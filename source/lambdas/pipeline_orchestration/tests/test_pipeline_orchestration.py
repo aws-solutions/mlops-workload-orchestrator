@@ -101,9 +101,22 @@ from tests.fixtures.orchestrator_fixtures import (
 
 content_type = "plain/text"
 
-
+@mock_aws
 def test_handler():
     # event["path"] == "/provisionpipeline" and pipeline_type is model_crad operation
+    s3_client = boto3.client("s3", region_name="us-east-1")
+    test_json_content = {
+        "pipeline_type": "test"
+    }
+    
+    s3_client.create_bucket(Bucket="configBucket")
+    s3_key = "mlops-config.json"
+    s3_client.put_object(
+        Bucket="configBucket",
+        Key=s3_key,
+        Body=json.dumps(test_json_content).encode('utf-8') ,
+        ContentType='application/json'
+    )
     with patch(
         "pipeline_orchestration.index.provision_model_card"
     ) as mock_provision_card:
@@ -126,11 +139,22 @@ def test_handler():
         handler(event, {})
         mock_provision_pipeline.assert_called_with(json.loads(event["body"]))
 
-        event = {
-            "pipeline_type": "test",
+        s3_event = {
+            "Records": [
+                {
+                    "eventSource": "aws:s3",
+                    "awsRegion": "us-east-1",
+                    "eventName": "ObjectCreated:Put",
+                    "s3": {
+                        "s3SchemaVersion": "1.0",
+                        "bucket": {"name": "configBucket"},
+                        "object": {"key": s3_key}
+                    }
+                }
+            ]
         }
-        handler(event, {})
-        mock_provision_pipeline.assert_called_with(event)
+        handler(s3_event, {})
+        mock_provision_pipeline.assert_called_with(test_json_content)
 
         event = {"should_return": "bad_request"}
         response = handler(event, {})

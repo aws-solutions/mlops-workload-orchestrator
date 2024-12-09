@@ -14,7 +14,7 @@ import json
 import os
 from botocore.client import BaseClient
 from sagemaker.session import Session
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List
 from shared.wrappers import BadRequest, api_exception_handler
 from shared.logger import get_logger
 from shared.helper import get_client, DateTimeEncoder
@@ -63,8 +63,19 @@ def handler(event: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
             return pipeline_status(event_body)
         else:
             raise BadRequest("Unacceptable event path. Path must be /provisionpipeline or /pipelinestatus")
-    elif "pipeline_type" in event:  # Lambda is being invoked from codepipeline/codebuild
-        return provision_pipeline(event)
+    elif "Records" in event and event["Records"][0]["eventSource"] == "aws:s3": # Lambda is being invoked from s3 event
+        try:
+            record = event["Records"][0]["s3"]
+            bucket = record["bucket"]["name"]
+            key = record["object"]["key"]
+            
+            response = s3_client.get_object(Bucket=bucket, Key=key)
+            file_content = response["Body"].read().decode("utf-8")
+            config_data = json.loads(file_content)
+        except Exception as e:
+            logger.error(f"Error processing S3 event: {str(e)}")
+            raise
+        return provision_pipeline(config_data)
     else:
         raise BadRequest(
             "Bad request format. Expected httpMethod or pipeline_type, received none. Check documentation "

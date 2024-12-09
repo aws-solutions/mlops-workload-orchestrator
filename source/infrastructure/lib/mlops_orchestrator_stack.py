@@ -28,14 +28,10 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_ecr as ecr,
     aws_lambda as lambda_,
-    aws_codepipeline as codepipeline,
-    aws_codepipeline_actions as codepipeline_actions,
-    aws_codecommit as codecommit,
-    aws_codebuild as codebuild,
-    aws_kms as kms,
     aws_apigateway as apigw,
     aws_sns_subscriptions as subscriptions,
     aws_sns as sns,
+    aws_s3_notifications as s3n
 )
 from aws_solutions_constructs import aws_apigateway_lambda
 from lib.blueprints.aspects.conditional_resource import ConditionalResources
@@ -56,10 +52,7 @@ from lib.blueprints.pipeline_definitions.deploy_actions import (
     create_send_data_custom_resource,
     create_copy_assets_lambda,
 )
-from lib.blueprints.pipeline_definitions.iam_policies import (
-    create_invoke_lambda_policy,
-    create_orchestrator_policy,
-)
+from lib.blueprints.pipeline_definitions.iam_policies import create_orchestrator_policy
 from lib.blueprints.pipeline_definitions.configure_multi_account import (
     configure_multi_account_parameters_permissions,
 )
@@ -75,6 +68,7 @@ from lib.blueprints.pipeline_definitions.sagemaker_model_registry import (
 from lib.blueprints.pipeline_definitions.cdk_context_value import (
     get_cdk_context_value,
 )
+from lib.utils.cfnguard_helper import CfnGuardSuppressResourceList
 
 
 class MLOpsStack(Stack):
@@ -85,7 +79,8 @@ class MLOpsStack(Stack):
 
         # Get stack parameters:
         notification_email = pf.create_notification_email_parameter(self)
-        git_address = pf.create_git_address_parameter(self)
+
+        config_bucket_name = pf.create_config_bucket_parameter(self)
         # Get the optional S3 assets bucket to use
         existing_bucket = pf.create_existing_bucket_parameter(self)
         # Get the optional S3 assets bucket to use
@@ -98,8 +93,8 @@ class MLOpsStack(Stack):
         allow_detailed_error_message = pf.create_detailed_error_message_parameter(self)
 
         # Conditions
-        git_address_provided = cf.create_git_address_provided_condition(
-            self, git_address
+        config_bucket_provided = cf.create_config_bucket_provided_condition(
+            self, config_bucket_name
         )
 
         # client provided an existing S3 bucket name, to be used for assets
@@ -478,88 +473,46 @@ class MLOpsStack(Stack):
             }
         }
 
-        # Codepipeline with Git source definitions ###
-        source_output = codepipeline.Artifact()
-        # processing git_address to retrieve repo name
-        repo_name_split = Fn.split("/", git_address.value_as_string)
-        repo_name = Fn.select(5, repo_name_split)
-        # getting codecommit repo cdk object using 'from_repository_name'
-        repo = codecommit.Repository.from_repository_name(
-            self, "AWSMLOpsFrameworkRepository", repo_name
-        )
+        config_bucket = s3.Bucket.from_bucket_name(
+            self,
+            "mlopsConfigBucket",
+            bucket_name=config_bucket_name.value_as_string
+        ) 
 
-        codebuild_project = codebuild.PipelineProject(
-            self,
-            "Take config file",
-            build_spec=codebuild.BuildSpec.from_object(
-                {
-                    "version": "0.2",
-                    "phases": {
-                        "build": {
-                            "commands": [
-                                "ls -a",
-                                "aws lambda invoke --function-name "
-                                + provisioner_apigw_lambda.lambda_function.function_name
-                                + " --payload fileb://mlops-config.json response.json"
-                                + " --invocation-type RequestResponse",
-                            ]
-                        }
-                    },
-                }
-            ),
-        )
-        # Defining a Codepipeline project with CodeCommit as source
-        codecommit_pipeline = codepipeline.Pipeline(
-            self,
-            "MLOpsCodeCommitPipeline",
-            stages=[
-                codepipeline.StageProps(
-                    stage_name="Source",
+        Aspects.of(config_bucket).add(ConditionalResources(config_bucket_provided))
+
+        config_s3_policy = iam.Policy (
+            self, "MlOpsS3ConfigReadPolicy",
+            statements= [ 
+                iam.PolicyStatement(
                     actions=[
-                        codepipeline_actions.CodeCommitSourceAction(
-                            action_name="CodeCommit",
-                            repository=repo,
-                            branch="main",
-                            output=source_output,
-                        )
+                        "s3:GetObject",
+                        "s3:ListBucket"
                     ],
-                ),
-                codepipeline.StageProps(
-                    stage_name="TakeConfig",
-                    actions=[
-                        codepipeline_actions.CodeBuildAction(
-                            action_name="provision_pipeline",
-                            input=source_output,
-                            outputs=[],
-                            project=codebuild_project,
-                        )
-                    ],
-                ),
+                    effect=iam.Effect.ALLOW,
+                    resources=[
+                        config_bucket.bucket_arn,
+                        f"{config_bucket.bucket_arn}/*"
+                    ]
+                )
             ],
-            cross_account_keys=False,
-        )
-        codecommit_pipeline.add_to_role_policy(
-            create_invoke_lambda_policy(
-                [provisioner_apigw_lambda.lambda_function.function_arn]
-            )
+            roles=[
+                provisioner_apigw_lambda.lambda_function.role
+            ]
         )
 
-        # add cfn-guard suppressions
-        codecommit_pipeline.artifact_bucket.node.default_child.cfn_options.metadata = {
-            "cfn_nag": {
-                "rules_to_suppress": [
-                    {
-                        "id": "W35",
-                        "reason": "This is a managed bucket generated by CDK for codepipeline.",
-                    },
-                    {
-                        "id": "W51",
-                        "reason": "This is a managed bucket generated by CDK for codepipeline.",
-                    },
-                ]
-            },
-            "guard": suppress_cfnguard_rules(["S3_BUCKET_NO_PUBLIC_RW_ACL"]),
-        }
+        config_s3_policy.node.default_child.cfn_options.condition = config_bucket_provided
+
+        config_bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(provisioner_apigw_lambda.lambda_function),
+            s3.NotificationKeyFilter(prefix="mlops-config.json")
+        )
+        
+        Aspects.of(self).add(CfnGuardSuppressResourceList({
+            "AWS::Lambda::Function": ["LAMBDA_INSIDE_VPC", "LAMBDA_CONCURRENCY_CHECK"],
+            "AWS::S3::Bucket": ["S3_BUCKET_LOGGING_ENABLED", "S3_BUCKET_NO_PUBLIC_RW_ACL"]
+        }))
 
         # custom resource for operational metrics###
         metrics_mapping = CfnMapping(
@@ -576,15 +529,10 @@ class MLOpsStack(Stack):
             ),
         )
 
-        # If user chooses Git as pipeline provision type, create codepipeline with Git repo as source
-        Aspects.of(repo).add(ConditionalResources(git_address_provided))
-        Aspects.of(codecommit_pipeline).add(ConditionalResources(git_address_provided))
-        Aspects.of(codebuild_project).add(ConditionalResources(git_address_provided))
-
         # Create Template Interface
         paramaters_list = [
             notification_email.logical_id,
-            git_address.logical_id,
+            config_bucket_name.logical_id,
             existing_bucket.logical_id,
             existing_ecr_repo.logical_id,
             use_model_registry.logical_id,
@@ -596,8 +544,8 @@ class MLOpsStack(Stack):
             f"{notification_email.logical_id}": {
                 "default": "Notification Email (Required)"
             },
-            f"{git_address.logical_id}": {
-                "default": "CodeCommit Repo URL Address (Optional)"
+            f"{config_bucket_name.logical_id}": {
+                "default": "MLOps configuration S3 bucket name (Optional)"
             },
             f"{existing_bucket.logical_id}": {
                 "default": "Name of an Existing S3 Bucket (Optional)"
@@ -645,8 +593,13 @@ class MLOpsStack(Stack):
                 "True",
                 "False",
             ).to_string(),
-            "gitSelected": Fn.condition_if(
-                git_address_provided.logical_id,
+            "configBucketProvided": Fn.condition_if(
+                config_bucket_provided.logical_id,
+                "True",
+                "False",
+            ).to_string(),
+            "ecrProvided": Fn.condition_if(
+                existing_ecr_provided.logical_id,
                 "True",
                 "False",
             ).to_string(),
@@ -654,9 +607,11 @@ class MLOpsStack(Stack):
             "IsMultiAccount": str(multi_account),
             "IsDelegatedAccount": is_delegated_admin if multi_account else Aws.NO_VALUE,
             "UseModelRegistry": use_model_registry.value_as_string,
+            "createModelPackageGroup": create_model_registry.value_as_string,
+            "allowDetailedErrorMessages": allow_detailed_error_message.value_as_string,
             "SolutionId": get_cdk_context_value(self, "SolutionId"),
             "Version": get_cdk_context_value(self, "Version"),
-        }
+        }   
 
         # create send data custom resource
         send_data_function = create_send_data_custom_resource(

@@ -1,6 +1,6 @@
-aws-cdk-lib==2.87.0
-constructs==10.1.272
-aws-solutions-constructs.aws-apigateway-lambda==2.41.0
-aws-solutions-constructs.aws-lambda-sagemakerendpoint==2.41.0
-aws-solutions-constructs.core==2.41.0
-aws-cdk.aws-servicecatalogappregistry-alpha==2.87.0.a.0
+aws-cdk-lib==2.167.0
+constructs==10.4.2
+aws-solutions-constructs.aws-apigateway-lambda==2.74.0
+aws-solutions-constructs.aws-lambda-sagemakerendpoint==2.74.0
+aws-solutions-constructs.core==2.74.0
+aws-cdk.aws-servicecatalogappregistry-alpha==2.167.0a0
