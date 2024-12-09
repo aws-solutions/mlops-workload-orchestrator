@@ -146,7 +146,7 @@ class TestAspects:
         )
 
     def test_aws_sdk_config_aspect(self):
-        self.template.all_resources_properties(
+        self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
                 "Environment": {
@@ -158,7 +158,7 @@ class TestAspects:
         )
 
     def test_aws_protocol_buffers_aspect(self):
-        self.template.all_resources_properties(
+        self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
                 "Environment": {

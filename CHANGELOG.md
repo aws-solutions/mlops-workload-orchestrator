@@ -5,20 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2024-12-09
+
+### Fixed
+
+- Issue with anonymized operation metrics collection
+
+### Changed
+
+- Migrated source for pipeline configuration file from CodeCommit to S3 bucket
+- Patched security vulnerabilities
+
 ## [2.2.2] - 2024-06-10
 
 ### Fixed
 
 - Upgrade issue with Lambda Custom Resource Sagemaker layer copy to new blueprints bucket
 
-### Updated
+### Changed
 
 - requests updated to 2.32.3
 
 
 ## [2.2.1] - 2024-05-27
 
-### Updated
+### Changed
 
 - boto3, botocore updated to 1.34.98
 - sagemaker-python-sdk updated to 2.218.0 for CVE-2024-34073
@@ -34,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [Service Catalog AppRegistry](https://docs.aws.amazon.com/servicecatalog/latest/arguide/intro-app-registry.html) resource to register the CloudFormation templates and underlying resources as an application in both Service Catalog AppRegistry and AWS Systems Manager Application Manager.
 
-### Updated
+### Changed
 
 - AWS Cloud Development Kit (CDK) v2.
 - Python runtime 3.10.
@@ -45,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.2] - 2023-04-17
 
-### Updated
+### Changed
 
 - The S3 bucket policy on the logging S3 bucket to grant access to the logging service principal (logging.s3.amazonaws.com) for access log delivery.
 - Python libraries. 
@@ -53,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.1] - 2023-01-11
 
-### Updated
+### Changed
 
 - Python runtime 3.9.
 - Python libraries. 
@@ -70,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.1] - 2022-08-12
 
-### Updated
+### Changed
 
 - The AWS IAM Role permissions with the new naming convention for the temporary Amazon SageMaker endpoints used by the Amazon SageMaker Clarify Model Bias Monitor and Amazon SageMaker Clarify Model Explainability Monitor pipelines.
 
@@ -91,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Amazon EventBridge Rules](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rules.html)
   to notify the solution's administrator(s) about the status of the training jobs.
 
-### Updated
+### Changed
 
 - The [Amazon Simple Notification Service (SNS)](https://aws.amazon.com/sns/?whats-new-cards.sort-by=item.additionalFields.postDateTime&whats-new-cards.sort-order=desc)
   Topic, used for pipelines notifications, was moved to the solution's main template.
@@ -105,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new pipeline to deploy [Amazon SageMaker Clarify Explainability (Feature Attribution Drift) Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-model-monitor-feature-attribution-drift.html). The new pipeline helps data scientists and ML engineers
   monitor predictions for feature attribution drift on a regular basis.
 
-### Updated
+### Changed
 
 - The solution's name was changed from "AWS MLOps Framework" to "MLOps Workload Orchestrator".
 
@@ -118,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable server-side error propagation to allow/disallow detailed error messages
   in the solution's APIs responses.
 
-### Updated
+### Changed
 
 - The format of the solution's APIs responses.
 - AWS Cloud Development Kit (AWS CDK) and AWS Solutions Constructs to version 1.126.0.
@@ -130,7 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new pipeline to deploy [Amazon SageMaker Model Quality Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-model-quality.html). The new pipeline monitors the performance of a deployed model by comparing the
   predictions that the model makes with the actual ground truth labels that the model attempts to predict.
 
-### Updated
+### Changed
 
 - The Model Monitor pipeline's API call. Now, the Model Monitor pipeline is split into two pipelines, Data Quality Monitor pipeline, and Model Quality Monitor pipeline.
 - The format of CloudFormation templates parameters' names from `PARAMETERNAME` to `ParameterName`.
@@ -145,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The option to use [Amazon SageMaker Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html) to deploy versioned models. The model registry allows you to catalog models for production, manage model versions, associate metadata with models, manage the approval status of a model, deploy models to production, and automate model deployment with CI/CD.
 - The option to use an [AWS Organizations delegated administrator account](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html) to orchestrate the deployment of Machine Learning (ML) workloads across the AWS Organizations accounts using AWS CloudFormation StackSets.
 
-### Updated
+### Changed
 
 - The build of the AWS Lambda layer for Amazon SageMaker SDK using the lambda:build-python3.8 Docker image.
 
@@ -159,7 +170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ability to use an existing Amazon Elastic Container Registry (Amazon ECR) repository, or create a new one, to store Docker images for custom ML algorithms.
 - Ability to provide different input/output Amazon Simple Storage Service (Amazon S3) buckets per pipeline deployment.
 
-### Updated
+### Changed
 
 - The creation of Amazon SageMaker resources using AWS CloudFormation.
 - The request body of the solution's API calls to provision pipelines.
@@ -168,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.1] - 2021-03-19
 
-### Updated
+### Changed
 
 - AWS ECR image scan on push property's name from `scanOnPush` to `ScanOnPush` for image scanning based on the recently updated property name in AWS CloudFormation.
 - AWS ECR repository's name in the IAM policy's resource name from `<repository-name>*` to `*<repository-name>*` to accommodate recent repository name being prefixed with AWS CloudFormation stack name.
@@ -180,7 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allows you to provision multiple model monitor pipelines to periodically monitor the quality of deployed Amazon SageMaker's ML models.
 - Ability to use an existing S3 bucket as the model artifact and data bucket, or create a new one to store model artifact and data.
 
-### Updated
+### Changed
 
 - Updates AWS Cloud Development Kit (AWS CDK) and AWS Solutions Constructs to version 1.83.0.
 - Updates request body of the Pipelines API's calls.

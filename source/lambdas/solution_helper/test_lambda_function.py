@@ -41,14 +41,14 @@ class LambdaTest(unittest.TestCase):
         lambda_function.custom_resource(event, None)
         self.assertIsNotNone(lambda_function.helper.Data.get("UUID"))
 
-        # test resource == "AnonymousMetric"
+        # test resource == "AnonymizedMetric"
         with mock.patch("requests.post", side_effect=mocked_requests_post) as mock_post:
             event = {
                 "RequestType": "Create",
                 "ResourceProperties": {
-                    "Resource": "AnonymousMetric",
+                    "Resource": "AnonymizedMetric",
                     "SolutionId": "SO1234",
-                    "gitSelected": "True",
+                    "configBucketProvided": "True",
                     "bucketSelected": "False",
                     "IsMultiAccount": "True",
                     "IsDelegatedAccount": "True",
@@ -61,7 +61,7 @@ class LambdaTest(unittest.TestCase):
                 actual_payload["Data"],
                 {
                     "RequestType": "Create",
-                    "gitSelected": "True",
+                    "configBucketProvided": "True",
                     "bucketSelected": "False",
                     "IsMultiAccount": "True",
                     "IsDelegatedAccount": "True",
@@ -73,9 +73,9 @@ class LambdaTest(unittest.TestCase):
         event = {
             "RequestType": "Create",
             "ResourceProperties": {
-                "Resource": "AnonymousMetric",
+                "Resource": "AnonymizedMetric",
                 "SolutionId": "SO1234",
-                "gitSelected": "True",
+                "configBucketProvided": "True",
                 "bucketSelected": "False",
                 "UUID": "some-uuid",
                 "Foo": "Bar",
@@ -104,7 +104,7 @@ class LambdaTest(unittest.TestCase):
         self.assertIn("Data", actual_payload)
         self.assertEqual(
             actual_payload["Data"],
-            {"RequestType": "Create", "gitSelected": "True", "bucketSelected": "False"},
+            {"RequestType": "Create", "configBucketProvided": "True", "bucketSelected": "False"},
         )
 
         # delete a key from the resource properties. It should send data with no errors
@@ -114,14 +114,14 @@ class LambdaTest(unittest.TestCase):
         actual_payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(
             actual_payload["Data"],
-            {"RequestType": "Create", "gitSelected": "True"},
+            {"RequestType": "Create", "configBucketProvided": "True"},
         )
 
     @mock.patch("requests.post", side_effect=mocked_requests_post(404, "HTTPError"))
     def test_send_anonymous_metrics_http_error(self, mock_post):
         event = {
             "RequestType": "Create",
-            "ResourceProperties": {"Resource": "AnonymousMetric", "SolutionId": "SO1234", "UUID": "some-uuid"},
+            "ResourceProperties": {"Resource": "AnonymizedMetric", "SolutionId": "SO1234", "UUID": "some-uuid"},
         }
 
         try:
@@ -139,7 +139,7 @@ class LambdaTest(unittest.TestCase):
         mock_post.side_effect = requests.exceptions.ConnectionError()
         event = {
             "RequestType": "Update",
-            "ResourceProperties": {"Resource": "AnonymousMetric", "SolutionId": "SO1234", "UUID": "some-uuid"},
+            "ResourceProperties": {"Resource": "AnonymizedMetric", "SolutionId": "SO1234", "UUID": "some-uuid"},
         }
 
         try:
@@ -157,7 +157,7 @@ class LambdaTest(unittest.TestCase):
         try:
             invalid_event = {
                 "RequestType": "Delete",
-                "ResourceProperties": {"Resource": "AnonymousMetric", "UUID": "some-uuid"},
+                "ResourceProperties": {"Resource": "AnonymizedMetric", "UUID": "some-uuid"},
             }
 
             from lambda_function import _send_anonymous_metrics
@@ -173,18 +173,18 @@ class LambdaTest(unittest.TestCase):
 
         resource_properties = {
             "ServiceToken": "lambda-fn-arn",
-            "Resource": "AnonymousMetric",
+            "Resource": "AnonymizedMetric",
             "SolutionId": "SO1234",
             "UUID": "some-uuid",
             "Region": "us-east-1",
-            "gitSelected": "True",
+            "configBucketProvided": "True",
             "bucketSelected": "False",
             "Foo": "Bar",
         }
 
         expected_response = {
             "Region": "us-east-1",
-            "gitSelected": "True",
+            "configBucketProvided": "True",
             "bucketSelected": "False",
         }
 

@@ -16,8 +16,6 @@ from constructs import IConstruct
 
 # This code enables `apply_aspect()` to apply conditions to a resource.
 # This way we can provision some resources if a condition is true.
-# For example, if PROVISIONTYPE parameter is 'Git' then we provision CodePipeline
-# with it's source stage being CodeCommit or GitHub
 # https://docs.aws.amazon.com/cdk/latest/guide/aspects.html
 
 

@@ -29,24 +29,16 @@ class ParameteresFactory:
         )
 
     @staticmethod
-    def create_git_address_parameter(scope: Construct) -> CfnParameter:
+    def create_config_bucket_parameter(scope: Construct) -> CfnParameter:
         return CfnParameter(
             scope,
-            "CodeCommitRepoAddress",
+            "ConfigS3Bucket",
             type="String",
-            description="AWS CodeCommit repository clone URL to connect to the framework.",
-            allowed_pattern=(
-                "^(((https:\\/\\/|ssh:\\/\\/)(git\\-codecommit)\\.[a-zA-Z0-9_.+-]+(amazonaws\\.com\\/)[a-zA-Z0-9-.]"
-                "+(\\/)[a-zA-Z0-9-.]+(\\/)[a-zA-Z0-9-.]+$)|^$)"
-            ),
-            min_length=0,
-            max_length=320,
-            constraint_description=(
-                "CodeCommit address must follow the pattern: ssh or "
-                "https://git-codecommit.REGION.amazonaws.com/version/repos/REPONAME"
-            ),
+            description="Specify the name of an existing S3 bucket where the mlops-config.json file will be uploaded to provision the pipeline. Note: The S3 bucket must be in the same AWS region as the stack being deployed.",
+            allowed_pattern="((?=^.{3,63}$)(?!^(\\d+\\.)+\\d+$)(^(([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])\\.)*([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$)|^$)",
+            min_length=0
         )
-
+    
     @staticmethod
     def create_existing_bucket_parameter(scope: Construct) -> CfnParameter:
         return CfnParameter(
@@ -1069,6 +1061,18 @@ class ConditionsFactory:
                 Fn.condition_equals(existing_bucket.value_as_string, "")
             ),
         )
+    
+    @staticmethod
+    def create_config_bucket_provided_condition(
+        scope: Construct, config_bucket: CfnParameter
+    ) -> CfnCondition:
+        return CfnCondition(
+            scope,
+            "ConfigBucketProvided",
+            expression=Fn.condition_not(
+                Fn.condition_equals(config_bucket.value_as_string, "")
+            ),
+        )    
 
     @staticmethod
     def create_existing_ecr_provided_condition(

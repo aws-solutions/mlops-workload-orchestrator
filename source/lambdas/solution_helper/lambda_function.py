@@ -27,10 +27,13 @@ def _sanitize_data(resource_properties):
     # Define allowed keys. You need to update this list with new metrics
     main_keys = [
         "bucketSelected",
-        "gitSelected",
+        "configBucketProvided",
+        "ecrProvided",
         "Region",
         "IsMultiAccount",
         "UseModelRegistry",
+        "createModelPackageGroup",
+        "allowDetailedErrorMessages",
         "Version",
     ]
     optional_keys = ["IsDelegatedAccount"]
@@ -99,7 +102,7 @@ def custom_resource(event, _):
     if resource == "UUID" and (request_type == "Create" or request_type == "Update"):
         random_id = str(uuid.uuid4())
         helper.Data.update({"UUID": random_id})
-    elif resource == "AnonymousMetric":
+    elif resource == "AnonymizedMetric":
         # send Anonymous Metrics to AWS
         _send_anonymous_metrics(request_type, resource_properties)
 

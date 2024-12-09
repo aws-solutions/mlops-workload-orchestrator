@@ -29,7 +29,7 @@ increases your team’s agility and efficiency by allowing them to repeat succes
 
 ## Architecture
 
-This solution is built with two primary components: 1) the orchestrator component, created by deploying the solution’s AWS CloudFormation template, and 2) the AWS CodePipeline instance deployed from either calling the solution’s API Gateway, or by committing a configuration file into an AWS CodeCommit repository. The solution’s pipelines are implemented as AWS CloudFormation templates, which allows you to extend the solution and add custom pipelines.
+This solution is built with two primary components: 1) the orchestrator component, created by deploying the solution’s AWS CloudFormation template, and 2) the AWS CodePipeline instance deployed from either calling the solution’s API Gateway, or by uploading a conﬁguration ﬁle to an Amazon S3 bucket. The solution’s pipelines are implemented as AWS CloudFormation templates, which allows you to extend the solution and add custom pipelines.
 
 To support multiple use cases and business needs, the solution provides two AWS CloudFormation templates: **option 1** for single account deployment, and **option 2** for multi-account deployment. In both templates, the solution provides the option to use Amazon SageMaker Model Registry to deploy versioned models.
 
@@ -79,6 +79,8 @@ Upon successfully cloning the repository into your local development environment
     │   │   │   │   └── sagemaker_layer
     │   │   │   ├── ml_pipelines
     │   │   │   └── pipeline_definitions
+    |   |   ├── utils
+    |   |   |   └── cfnguard_helper.py
     │   │   └── mlops_orchestrator_stack.py
     │   └── test             [folder containing CDK unit tests]
     ├── lambdas              [folder containing lambdas for the main templates]
