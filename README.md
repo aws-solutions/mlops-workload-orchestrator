@@ -1,3 +1,7 @@
+# Deprecation Notice
+
+As of 06/10/2025, The MLOps Workload Orchestrator solution has been deprecated and will not be receiving any additional features or updates. We encourage customers to explore using [Amazon SageMaker Unified Studio](https://aws.amazon.com/sagemaker/unified-studio/) to manage their ML workloads.
+
 # mlops-workload-orchestrator
 
 The machine learning (ML) lifecycle is an iterative and repetitive process that involves
